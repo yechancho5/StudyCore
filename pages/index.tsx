@@ -76,7 +76,7 @@ const LandingPage = () => {
         </div>
         {/* Title & Subtitle */}
         <div className="flex flex-col gap-2 text-center">
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Collaborative Study Room</h1>
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">StudyCore</h1>
           <p className="text-gray-500 text-lg">Join or create a room to study together in real time.</p>
         </div>
         {/* Inputs */}
