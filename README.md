@@ -4,7 +4,7 @@ A collaborative study app for real-time problem-solving, now powered by **Postgr
 
 ---
 
-## 🏗️ Project Architecture (PostgreSQL + Prisma)
+## Project Architecture (PostgreSQL + Prisma)
 
 ![Architecture Diagram](assets/architecture-diagramv2.png)
 
@@ -16,7 +16,7 @@ A collaborative study app for real-time problem-solving, now powered by **Postgr
 
 ---
 
-## 🗄️ Data Model (Prisma)
+## Data Model (Prisma)
 
 ### **Room**
 - `id`: UUID (primary key)
@@ -37,7 +37,7 @@ A collaborative study app for real-time problem-solving, now powered by **Postgr
 
 ---
 
-## 🔄 Data Flow & Real-Time Polling
+## Data Flow & Real-Time Polling
 
 - **Room Creation:**
   - Frontend calls `/api/room` (POST) → API route uses Prisma to create a new Room in Postgres.
@@ -54,7 +54,7 @@ A collaborative study app for real-time problem-solving, now powered by **Postgr
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 StudyCore/
@@ -82,7 +82,7 @@ StudyCore/
 
 ---
 
-## 📝 How It Works (Prisma + Polling)
+## How It Works
 - All data is stored in PostgreSQL, accessed via Prisma in Next.js API routes.
 - The frontend never talks to the database directly—only via API routes.
 - Real-time sync is achieved by polling the API every 3 seconds for room and answer updates.
