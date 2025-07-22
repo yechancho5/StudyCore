@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { db } from '../../lib/firebase';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
+
+const POLL_INTERVAL = 3000;
 
 const RoomPage = () => {
   const router = useRouter();
@@ -31,8 +31,71 @@ const RoomPage = () => {
     return userId;
   };
 
+  // Fetch room data
+  const fetchRoom = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/room/${roomId}`);
+      if (!res.ok) throw new Error('Room not found');
+      const data = await res.json();
+      setRoom(data);
+      setQuestionInput(data.question || '');
+      setRevealed(!!data.revealed);
+      // Check if current user is host
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('study-userId');
+        setIsHost(userId && data.hostId && userId === data.hostId);
+      }
+    } catch (err) {
+      setError('Room not found.');
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId]);
+
+  // Fetch answers
+  const fetchAnswers = useCallback(async () => {
+    if (!revealed || !roomId || typeof roomId !== 'string') return;
+    setFetchingAnswers(true);
+    try {
+      const res = await fetch(`/api/room/${roomId}/answers`);
+      if (!res.ok) throw new Error('Failed to fetch answers');
+      const data = await res.json();
+      setAnswers(data);
+    } catch (err) {
+      // Optionally set error
+    } finally {
+      setFetchingAnswers(false);
+    }
+  }, [revealed, roomId]);
+
+  // Poll for room and answers
   useEffect(() => {
-    // Get username from query or localStorage
+    fetchRoom();
+    let roomInterval: NodeJS.Timeout;
+    if (roomId && typeof roomId === 'string') {
+      roomInterval = setInterval(fetchRoom, POLL_INTERVAL);
+    }
+    return () => {
+      if (roomInterval) clearInterval(roomInterval);
+    };
+  }, [fetchRoom, roomId]);
+
+  useEffect(() => {
+    fetchAnswers();
+    let answersInterval: NodeJS.Timeout;
+    if (revealed && roomId && typeof roomId === 'string') {
+      answersInterval = setInterval(fetchAnswers, POLL_INTERVAL);
+    }
+    return () => {
+      if (answersInterval) clearInterval(answersInterval);
+    };
+  }, [fetchAnswers, revealed, roomId]);
+
+  // Username logic
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       if (typeof queryUsername === 'string' && queryUsername) {
         setUsername(queryUsername);
@@ -44,64 +107,26 @@ const RoomPage = () => {
     }
   }, [queryUsername]);
 
-  // Listen for real-time room updates (including revealed)
-  useEffect(() => {
-    if (!roomId || typeof roomId !== 'string') return;
-    setLoading(true);
-    setError('');
-    const unsub = onSnapshot(doc(db, 'rooms', roomId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setRoom(data);
-        setQuestionInput(data.question || '');
-        setRevealed(!!data.revealed);
-        // Check if current user is host
-        if (typeof window !== 'undefined') {
-          const userId = localStorage.getItem('study-userId');
-          setIsHost(userId && data.hostId && userId === data.hostId);
-        }
-      } else {
-        setError('Room not found.');
-      }
-      setLoading(false);
-    }, (err) => {
-      setError('Failed to fetch room.');
-      setLoading(false);
-      console.error(err);
-    });
-    return () => unsub();
-  }, [roomId]);
-
-  // Fetch answers when revealed
-  useEffect(() => {
-    if (!revealed || !roomId || typeof roomId !== 'string') return;
-    setFetchingAnswers(true);
-    getDocs(collection(db, 'rooms', roomId, 'answers'))
-      .then((querySnap) => {
-        const ans: any[] = [];
-        querySnap.forEach(doc => ans.push({ id: doc.id, ...doc.data() }));
-        setAnswers(ans);
-      })
-      .catch((err) => {
-        console.error('Failed to fetch answers:', err);
-      })
-      .finally(() => setFetchingAnswers(false));
-  }, [revealed, roomId]);
-
+  // Post question (host only)
   const handlePostQuestion = async () => {
     if (!roomId || typeof roomId !== 'string') return;
     setPosting(true);
     try {
-      await updateDoc(doc(db, 'rooms', roomId), { question: questionInput });
-      setRoom((prev: any) => ({ ...prev, question: questionInput }));
+      const res = await fetch(`/api/room/${roomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: questionInput }),
+      });
+      if (!res.ok) throw new Error('Failed to post question');
+      fetchRoom();
     } catch (err) {
       alert('Failed to post question.');
-      console.error(err);
     } finally {
       setPosting(false);
     }
   };
 
+  // Save answer
   const handleSaveAnswer = async () => {
     if (!roomId || typeof roomId !== 'string') return;
     if (!answer.trim()) return;
@@ -109,29 +134,35 @@ const RoomPage = () => {
     setSaved(false);
     const userId = getOrCreateUserId();
     try {
-      await setDoc(doc(db, 'rooms', roomId, 'answers', userId), {
-        username: username || 'Anonymous',
-        text: answer,
-        timestamp: serverTimestamp(),
-        revealed: false,
+      const res = await fetch(`/api/room/${roomId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, username: username || 'Anonymous', text: answer }),
       });
+      if (!res.ok) throw new Error('Failed to save answer');
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      fetchAnswers();
     } catch (err) {
       alert('Failed to save answer.');
-      console.error(err);
     } finally {
       setSaving(false);
     }
   };
 
+  // Reveal answers (host only)
   const handleRevealAnswers = async () => {
     if (!roomId || typeof roomId !== 'string') return;
     try {
-      await updateDoc(doc(db, 'rooms', roomId), { revealed: true });
+      const res = await fetch(`/api/room/${roomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revealed: true }),
+      });
+      if (!res.ok) throw new Error('Failed to reveal answers');
+      fetchRoom();
     } catch (err) {
       alert('Failed to reveal answers.');
-      console.error(err);
     }
   };
 

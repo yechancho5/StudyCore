@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
-import { db } from '../lib/firebase';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const LandingPage = () => {
   const router = useRouter();
@@ -27,18 +25,17 @@ const LandingPage = () => {
       return;
     }
     setLoading(true);
-    const newRoomId = nanoid(10);
     const userId = getOrCreateUserId();
     try {
-      await setDoc(doc(collection(db, 'rooms'), newRoomId), {
-        roomId: newRoomId,
-        createdAt: serverTimestamp(),
-        question: '',
-        revealed: false,
-        hostId: userId,
+      const res = await fetch('/api/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostId: userId }),
       });
+      if (!res.ok) throw new Error('Failed to create room');
+      const room = await res.json();
       localStorage.setItem('study-username', username);
-      router.push(`/room/${newRoomId}?username=${encodeURIComponent(username)}`);
+      router.push(`/room/${room.id}?username=${encodeURIComponent(username)}`);
     } catch (err) {
       setError('Failed to create room. Please try again.');
     } finally {
