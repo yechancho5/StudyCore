@@ -4,7 +4,7 @@ A lightweight study tool for collaborative problem-solving with private answer p
 
 ## MVP Features
 - Landing page: Create or join a room with a username
-- Room page: Shared problem prompt, private answer pad, reveal answers
+- Room page: Shared problem prompt, private answer, reveal answers
 - Real-time sync via Firestore (no login/auth for MVP)
 - Clean, responsive UI with Tailwind CSS
 
@@ -23,8 +23,8 @@ StudyCore/
 │   └── room/
 │       └── [roomId].tsx         # Dynamic room page
 ├── components/
-│   ├── UsernameInput.tsx        # Username input component
-│   ├── RoomIdInput.tsx          # Room ID input component
+│   ├── UsernameInput.tsx        # Username input 
+│   ├── RoomIdInput.tsx          # Room ID input 
 │   ├── QuestionPrompt.tsx       # Shared problem prompt
 │   ├── PrivateAnswerPad.tsx     # Private answer textarea
 │   ├── RevealButton.tsx         # Reveal answers button
@@ -40,3 +40,7 @@ StudyCore/
 ├── tsconfig.json                # TypeScript config
 └── README.md                    # Project overview
 ``` 
+
+## Project Architecture
+
+![StudyCore Architecture Diagram](./assets/architecture-diagramv1.png)
