@@ -1,0 +1,30 @@
+// Prisma schema for StudyCore
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now())
+  question  String?   // optional
+  revealed  Boolean   @default(false)
+  hostId    String    @db.Uuid
+  answers   Answer[]
+}
+
+model Answer {
+  id        String   @id @default(uuid()) @db.Uuid
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String   @db.Uuid
+  userId    String   @db.Uuid
+  username  String
+  text      String
+  timestamp DateTime @default(now())
+  revealed  Boolean  @default(false)
+}
