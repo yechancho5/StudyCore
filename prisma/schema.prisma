@@ -14,7 +14,7 @@ model Room {
   createdAt DateTime  @default(now())
   question  String?   // optional
   revealed  Boolean   @default(false)
-  hostId    String    @db.Uuid
+  hostId    String
   answers   Answer[]
 }
 
@@ -22,7 +22,7 @@ model Answer {
   id        String   @id @default(uuid()) @db.Uuid
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   roomId    String   @db.Uuid
-  userId    String   @db.Uuid
+  userId    String
   username  String
   text      String
   timestamp DateTime @default(now())

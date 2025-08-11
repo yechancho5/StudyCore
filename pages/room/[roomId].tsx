@@ -73,26 +73,22 @@ const RoomPage = () => {
 
   // Poll for room and answers
   useEffect(() => {
+    if (!roomId || typeof roomId !== 'string') return;
+    
     fetchRoom();
-    let roomInterval: NodeJS.Timeout;
-    if (roomId && typeof roomId === 'string') {
-      roomInterval = setInterval(fetchRoom, POLL_INTERVAL);
-    }
-    return () => {
-      if (roomInterval) clearInterval(roomInterval);
-    };
-  }, [fetchRoom, roomId]);
+    const roomInterval = setInterval(fetchRoom, POLL_INTERVAL);
+    
+    return () => clearInterval(roomInterval);
+  }, [roomId, fetchRoom]);
 
   useEffect(() => {
+    if (!revealed || !roomId || typeof roomId !== 'string') return;
+    
     fetchAnswers();
-    let answersInterval: NodeJS.Timeout;
-    if (revealed && roomId && typeof roomId === 'string') {
-      answersInterval = setInterval(fetchAnswers, POLL_INTERVAL);
-    }
-    return () => {
-      if (answersInterval) clearInterval(answersInterval);
-    };
-  }, [fetchAnswers, revealed, roomId]);
+    const answersInterval = setInterval(fetchAnswers, POLL_INTERVAL);
+    
+    return () => clearInterval(answersInterval);
+  }, [revealed, roomId, fetchAnswers]);
 
   // Username logic
   useEffect(() => {

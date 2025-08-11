@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           createdAt: new Date(),
           question: null,
           revealed: false,
-          hostId: uuidv4(), // Generate a proper UUID for hostId
+          hostId, // Use the hostId from the request body
         },
       });
       return res.status(201).json(room);
