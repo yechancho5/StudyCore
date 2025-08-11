@@ -3,5 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
-  "/room/[roomId]": "pages/room/[roomId].js"
+  "/room/[roomId]": "pages/room/[roomId].js",
+  "/api/room": "pages/api/room.js"
 }

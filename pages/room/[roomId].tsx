@@ -21,6 +21,7 @@ const RoomPage = () => {
   const [answers, setAnswers] = useState<any[]>([]);
   const [fetchingAnswers, setFetchingAnswers] = useState(false);
   const [answersLoaded, setAnswersLoaded] = useState(false);
+  const [readyForNextQuestion, setReadyForNextQuestion] = useState(false);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -234,6 +235,7 @@ const RoomPage = () => {
       setRevealed(false); // Reset revealed state
       setAnswers([]); // Clear answers for new question
       setAnswersLoaded(false); // Reset answers loaded state
+      setReadyForNextQuestion(false); // Reset ready state
       
       // Notify other users immediately
       localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
@@ -298,11 +300,20 @@ const RoomPage = () => {
       setRoom((prev: any) => ({ ...prev, revealed: true }));
       setRevealed(true);
       
+      // Clear the question input field after revealing
+      setQuestionInput('');
+      
       // Notify other users immediately
       localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
     } catch (err) {
       alert('Failed to reveal answers.');
     }
+  };
+
+  // Next question button (host only)
+  const handleNextQuestion = () => {
+    setReadyForNextQuestion(true);
+    setQuestionInput(''); // Clear any existing input
   };
 
   if (loading) {
@@ -340,19 +351,19 @@ const RoomPage = () => {
           <div className="text-lg font-semibold mb-1">Study Question</div>
           {isHost ? (
             <div>
-              {/* Show question input when no question exists or after answers are revealed */}
-              {(!room?.question || revealed) ? (
+              {/* Show question input when no question exists or when ready for next question */}
+              {(!room?.question || (revealed && readyForNextQuestion)) ? (
                 <>
-                  {revealed && (
+                  {revealed && readyForNextQuestion && (
                     <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-green-700 text-sm font-medium">Answers revealed! Post a new question to start the next round.</p>
+                      <p className="text-green-700 text-sm font-medium">Ready for the next question! Enter a new question to start the next round.</p>
                     </div>
                   )}
                   <textarea
                     className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition mb-2 resize-none"
                     value={questionInput}
                     onChange={e => setQuestionInput(e.target.value)}
-                    placeholder={revealed ? "Enter a new question for the next round" : "Enter a question for the room"}
+                    placeholder="Enter a question for the room"
                     rows={3}
                   />
                   <button
@@ -360,7 +371,7 @@ const RoomPage = () => {
                     onClick={handlePostQuestion}
                     disabled={posting || !questionInput.trim()}
                   >
-                    {posting ? 'Posting...' : (revealed ? 'Post New Question' : 'Post Question')}
+                    {posting ? 'Posting...' : 'Post Question'}
                   </button>
                 </>
               ) : (
@@ -375,6 +386,16 @@ const RoomPage = () => {
                   onClick={handleRevealAnswers}
                 >
                   Reveal Answers
+                </button>
+              )}
+              
+              {/* Next Question Button for Host */}
+              {revealed && !readyForNextQuestion && (
+                <button
+                  className="w-full mt-2 bg-blue-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
+                  onClick={handleNextQuestion}
+                >
+                  Next Question
                 </button>
               )}
             </div>
