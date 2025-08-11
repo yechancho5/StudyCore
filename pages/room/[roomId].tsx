@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
 
-const POLL_INTERVAL = 2000; // 2 seconds - more responsive
+const POLL_INTERVAL = 5000; // 5 seconds - reduce Realtime load
 
 const RoomPage = () => {
   const router = useRouter();
@@ -213,6 +213,32 @@ const RoomPage = () => {
     }
   }, [queryUsername]);
 
+  // Track previous question to detect changes (for non-hosts)
+  const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);
+  
+  // Detect question changes and reset saved answer state for non-hosts
+  useEffect(() => {
+    if (!roomId || typeof roomId !== 'string' || isHost) return;
+    
+    // If question changed and we had a saved answer, reset it
+    if (room?.question !== previousQuestion && previousQuestion !== null) {
+      setHasSavedAnswer(false);
+      // Clear the local answer for this user
+      setAnswers(prev => prev.filter(a => a.userId !== getOrCreateUserId()));
+    }
+    
+    // If question was reset to null (Next Question clicked), reset everything
+    if (room?.question === null && previousQuestion !== null) {
+      setHasSavedAnswer(false);
+      setRevealed(false);
+      setAnswers([]);
+      setAnswersLoaded(false);
+    }
+    
+    // Update previous question
+    setPreviousQuestion(room?.question || null);
+  }, [room?.question, roomId, isHost, previousQuestion]);
+
   // Post question (host only)
   const handlePostQuestion = async () => {
     if (!roomId || typeof roomId !== 'string') return;
@@ -316,9 +342,41 @@ const RoomPage = () => {
   };
 
   // Next question button (host only)
-  const handleNextQuestion = () => {
-    setReadyForNextQuestion(true);
-    setQuestionInput(''); // Clear any existing input
+  const handleNextQuestion = async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    
+    try {
+      // Update the database to reset to initial state
+      const res = await fetch(`/api/room/${roomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          question: null, // Clear the question
+          revealed: false // Reset revealed state
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to reset room');
+      
+      // Update local state immediately
+      setReadyForNextQuestion(true);
+      setQuestionInput(''); // Clear any existing input
+      setHasSavedAnswer(false); // Reset saved answer state for all users
+      setRevealed(false); // Reset revealed state
+      setAnswers([]); // Clear revealed answers
+      setAnswersLoaded(false); // Reset answers loaded state
+      
+      // Update room state to reset to initial state
+      setRoom((prev: any) => ({ 
+        ...prev, 
+        question: null, // Clear the question
+        revealed: false // Reset revealed state
+      }));
+      
+      // Notify other users to reset their state
+      localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
+    } catch (err) {
+      alert('Failed to reset room.');
+    }
   };
 
   if (loading) {

@@ -11,6 +11,12 @@ export const prisma =
         url: process.env.DATABASE_URL,
       },
     },
+    // Better connection management for serverless
+    __internal: {
+      engine: {
+        connectionLimit: 1, // Limit connections for serverless
+      },
+    },
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma; 

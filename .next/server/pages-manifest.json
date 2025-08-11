@@ -2,6 +2,9 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/room/[roomId]": "pages/room/[roomId].js"
+  "/api/room/[roomId]": "pages/api/room/[roomId].js",
+  "/api/room": "pages/api/room.js",
+  "/api/room/[roomId]/answers": "pages/api/room/[roomId]/answers.js",
+  "/room/[roomId]": "pages/room/[roomId].js",
+  "/": "pages/index.js"
 }

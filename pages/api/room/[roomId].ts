@@ -31,6 +31,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }),
         ]);
         return res.status(200).json(result[0]);
+      } else if (question === null && revealed === false) {
+        // If resetting to initial state (null question), clear all answers
+        const result = await prisma.$transaction([
+          prisma.room.update({
+            where: { id: roomId },
+            data: { question: null, revealed: false },
+          }),
+          prisma.answer.deleteMany({
+            where: { roomId },
+          }),
+        ]);
+        return res.status(200).json(result[0]);
       } else {
         // Normal update without clearing answers
         const room = await prisma.room.update({

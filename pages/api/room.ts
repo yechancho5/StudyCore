@@ -29,6 +29,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (error) {
       console.error('Failed to create room:', error);
       return res.status(500).json({ error: 'Failed to create room', details: error });
+    } finally {
+      // Ensure connection is properly closed in serverless environment
+      if (process.env.NODE_ENV === 'production') {
+        await prisma.$disconnect();
+      }
     }
   } else {
     res.setHeader('Allow', ['POST']);
