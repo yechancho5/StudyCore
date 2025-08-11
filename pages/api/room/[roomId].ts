@@ -18,11 +18,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'PATCH') {
     const { question, revealed } = req.body;
     try {
-      const room = await prisma.room.update({
-        where: { id: roomId },
-        data: { question, revealed },
-      });
-      return res.status(200).json(room);
+      // If posting a new question and resetting revealed state, clear all answers
+      if (question && revealed === false) {
+        // Use a transaction to update room and clear answers
+        const result = await prisma.$transaction([
+          prisma.room.update({
+            where: { id: roomId },
+            data: { question, revealed },
+          }),
+          prisma.answer.deleteMany({
+            where: { roomId },
+          }),
+        ]);
+        return res.status(200).json(result[0]);
+      } else {
+        // Normal update without clearing answers
+        const room = await prisma.room.update({
+          where: { id: roomId },
+          data: { question, revealed },
+        });
+        return res.status(200).json(room);
+      }
     } catch (error) {
       return res.status(500).json({ error: 'Failed to update room', details: error });
     }

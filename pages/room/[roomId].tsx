@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
 
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = 2000; // 2 seconds - more responsive
 
 const RoomPage = () => {
   const router = useRouter();
@@ -20,6 +20,7 @@ const RoomPage = () => {
   const [revealed, setRevealed] = useState(false);
   const [answers, setAnswers] = useState<any[]>([]);
   const [fetchingAnswers, setFetchingAnswers] = useState(false);
+  const [answersLoaded, setAnswersLoaded] = useState(false);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -31,7 +32,7 @@ const RoomPage = () => {
     return userId;
   };
 
-  // Fetch room data
+  // Fetch room data (with loading state)
   const fetchRoom = useCallback(async () => {
     if (!roomId || typeof roomId !== 'string') return;
     setLoading(true);
@@ -55,40 +56,145 @@ const RoomPage = () => {
     }
   }, [roomId]);
 
-  // Fetch answers
+  // Poll room data (without loading state)
+  const pollRoom = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    try {
+      const res = await fetch(`/api/room/${roomId}`);
+      if (!res.ok) return; // Don't set error for polling
+      const data = await res.json();
+      
+      // Only update room state if there are actual changes
+      setRoom((prevRoom: any) => {
+        if (prevRoom?.question !== data.question || prevRoom?.revealed !== data.revealed) {
+          return data;
+        }
+        return prevRoom;
+      });
+      
+      // Only update question input if it's empty (don't overwrite user input)
+      setQuestionInput(prev => prev || data.question || '');
+      
+      // Only update revealed state if it changed
+      setRevealed(prev => {
+        if (prev !== !!data.revealed) {
+          return !!data.revealed;
+        }
+        return prev;
+      });
+      
+      // Check if current user is host
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('study-userId');
+        setIsHost(userId && data.hostId && userId === data.hostId);
+      }
+    } catch (err) {
+      // Silently fail for polling
+    }
+  }, [roomId]);
+
+  // Fetch answers (with loading state)
   const fetchAnswers = useCallback(async () => {
-    if (!revealed || !roomId || typeof roomId !== 'string') return;
+    if (!roomId || typeof roomId !== 'string') return;
     setFetchingAnswers(true);
     try {
       const res = await fetch(`/api/room/${roomId}/answers`);
       if (!res.ok) throw new Error('Failed to fetch answers');
       const data = await res.json();
       setAnswers(data);
+      setAnswersLoaded(true);
     } catch (err) {
       // Optionally set error
     } finally {
       setFetchingAnswers(false);
     }
-  }, [revealed, roomId]);
+  }, [roomId]);
 
-  // Poll for room and answers
+  // Poll answers (without loading state)
+  const pollAnswers = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    try {
+      const res = await fetch(`/api/room/${roomId}/answers`);
+      if (!res.ok) return; // Don't set error for polling
+      const data = await res.json();
+      setAnswers(data);
+    } catch (err) {
+      // Silently fail for polling
+    }
+  }, [roomId]);
+
+  // Use refs to store stable references to the fetch functions
+  const fetchRoomRef = useRef(fetchRoom);
+  const pollRoomRef = useRef(pollRoom);
+  const fetchAnswersRef = useRef(fetchAnswers);
+  const pollAnswersRef = useRef(pollAnswers);
+  
+  // Update refs when functions change
+  useEffect(() => {
+    fetchRoomRef.current = fetchRoom;
+  }, [fetchRoom]);
+  
+  useEffect(() => {
+    pollRoomRef.current = pollRoom;
+  }, [pollRoom]);
+  
+  useEffect(() => {
+    fetchAnswersRef.current = fetchAnswers;
+  }, [fetchAnswers]);
+  
+  useEffect(() => {
+    pollAnswersRef.current = pollAnswers;
+  }, [pollAnswers]);
+
+  // Single polling mechanism using stable refs
   useEffect(() => {
     if (!roomId || typeof roomId !== 'string') return;
     
-    fetchRoom();
-    const roomInterval = setInterval(fetchRoom, POLL_INTERVAL);
+    // Initial fetch
+    fetchRoomRef.current();
     
-    return () => clearInterval(roomInterval);
-  }, [roomId, fetchRoom]);
+    // Set up polling only if POLL_INTERVAL > 0
+    if (POLL_INTERVAL > 0) {
+      const interval = setInterval(() => {
+        pollRoomRef.current();
+      }, POLL_INTERVAL);
+      
+      // Also check for immediate updates every 500ms (but less frequently when revealed)
+      const fastInterval = setInterval(() => {
+        const lastUpdate = localStorage.getItem(`room-${roomId}-updated`);
+        if (lastUpdate) {
+          const updateTime = parseInt(lastUpdate);
+          const now = Date.now();
+          // If update is recent (within last 5 seconds), poll immediately
+          if (now - updateTime < 5000) {
+            pollRoomRef.current();
+          }
+        }
+      }, revealed ? 2000 : 500); // Slower polling when answers are revealed
+      
+      return () => {
+        clearInterval(interval);
+        clearInterval(fastInterval);
+      };
+    }
+  }, [roomId]); // Only depend on roomId
 
+  // Separate effect for answers polling
   useEffect(() => {
-    if (!revealed || !roomId || typeof roomId !== 'string') return;
+    if (!roomId || typeof roomId !== 'string' || !revealed) return;
     
-    fetchAnswers();
-    const answersInterval = setInterval(fetchAnswers, POLL_INTERVAL);
+    // Initial fetch with loading state
+    fetchAnswersRef.current();
     
-    return () => clearInterval(answersInterval);
-  }, [revealed, roomId, fetchAnswers]);
+    // Set up polling only if POLL_INTERVAL > 0
+    if (POLL_INTERVAL > 0) {
+      const interval = setInterval(() => {
+        pollAnswersRef.current();
+      }, POLL_INTERVAL);
+      
+      return () => clearInterval(interval);
+    }
+  }, [roomId, revealed]); // Only depend on roomId and revealed
 
   // Username logic
   useEffect(() => {
@@ -111,10 +217,26 @@ const RoomPage = () => {
       const res = await fetch(`/api/room/${roomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: questionInput }),
+        body: JSON.stringify({ 
+          question: questionInput,
+          revealed: false // Reset revealed state when posting new question
+        }),
       });
       if (!res.ok) throw new Error('Failed to post question');
-      fetchRoom();
+      
+      // Update local state immediately to avoid blinking
+      setRoom((prev: any) => ({ 
+        ...prev, 
+        question: questionInput,
+        revealed: false 
+      }));
+      setQuestionInput(''); // Clear the input
+      setRevealed(false); // Reset revealed state
+      setAnswers([]); // Clear answers for new question
+      setAnswersLoaded(false); // Reset answers loaded state
+      
+      // Notify other users immediately
+      localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
     } catch (err) {
       alert('Failed to post question.');
     } finally {
@@ -136,9 +258,24 @@ const RoomPage = () => {
         body: JSON.stringify({ userId, username: username || 'Anonymous', text: answer }),
       });
       if (!res.ok) throw new Error('Failed to save answer');
+      
+      // Update local state immediately to avoid blinking
+      const newAnswer = {
+        id: Date.now().toString(), // Temporary ID
+        roomId,
+        userId,
+        username: username || 'Anonymous',
+        text: answer,
+        timestamp: new Date(),
+        revealed: false
+      };
+      setAnswers(prev => [...prev, newAnswer]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-      fetchAnswers();
+      setAnswer(''); // Clear the input
+      
+      // Notify other users immediately
+      localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
     } catch (err) {
       alert('Failed to save answer.');
     } finally {
@@ -156,7 +293,13 @@ const RoomPage = () => {
         body: JSON.stringify({ revealed: true }),
       });
       if (!res.ok) throw new Error('Failed to reveal answers');
-      fetchRoom();
+      
+      // Update local state immediately to avoid blinking
+      setRoom((prev: any) => ({ ...prev, revealed: true }));
+      setRevealed(true);
+      
+      // Notify other users immediately
+      localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
     } catch (err) {
       alert('Failed to reveal answers.');
     }
@@ -197,22 +340,27 @@ const RoomPage = () => {
           <div className="text-lg font-semibold mb-1">Study Question</div>
           {isHost ? (
             <div>
-              {/* If no question or revealed, show textarea and Post button. Otherwise, show question as read-only */}
+              {/* Show question input when no question exists or after answers are revealed */}
               {(!room?.question || revealed) ? (
                 <>
+                  {revealed && (
+                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-green-700 text-sm font-medium">Answers revealed! Post a new question to start the next round.</p>
+                    </div>
+                  )}
                   <textarea
                     className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition mb-2 resize-none"
                     value={questionInput}
                     onChange={e => setQuestionInput(e.target.value)}
-                    placeholder="Enter a question for the room"
+                    placeholder={revealed ? "Enter a new question for the next round" : "Enter a question for the room"}
                     rows={3}
                   />
                   <button
                     className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 transition disabled:opacity-60 mb-2"
                     onClick={handlePostQuestion}
-                    disabled={posting}
+                    disabled={posting || !questionInput.trim()}
                   >
-                    {posting ? 'Posting...' : 'Post Question'}
+                    {posting ? 'Posting...' : (revealed ? 'Post New Question' : 'Post Question')}
                   </button>
                 </>
               ) : (
@@ -239,28 +387,36 @@ const RoomPage = () => {
         {/* Private Answer Pad */}
         <div className="flex flex-col gap-2 mb-6">
           <div className="text-lg font-semibold mb-1">Your Private Answer</div>
-          <textarea
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
-            value={answer}
-            onChange={e => setAnswer(e.target.value)}
-            placeholder="Write your answer here..."
-            rows={5}
-          />
-          <button
-            className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:opacity-60"
-            onClick={handleSaveAnswer}
-            disabled={saving || !answer.trim()}
-          >
-            {saving ? 'Saving...' : 'Save Answer'}
-          </button>
-          {saved && <span className="text-green-600 font-semibold ml-2">Saved!</span>}
+          {!room?.question ? (
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
+              Wait for the host to post a question before you can answer.
+            </div>
+          ) : (
+            <>
+              <textarea
+                className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
+                value={answer}
+                onChange={e => setAnswer(e.target.value)}
+                placeholder="Write your answer here..."
+                rows={5}
+              />
+              <button
+                className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:opacity-60"
+                onClick={handleSaveAnswer}
+                disabled={saving || !answer.trim()}
+              >
+                {saving ? 'Saving...' : 'Save Answer'}
+              </button>
+              {saved && <span className="text-green-600 font-semibold ml-2">Saved!</span>}
+            </>
+          )}
         </div>
         {/* Revealed Answers Section */}
         <div className="mt-8">
           {revealed ? (
             <div>
               <h2 className="text-2xl font-bold mb-4 text-center text-indigo-700">Revealed Answers</h2>
-              {fetchingAnswers ? (
+              {fetchingAnswers && !answersLoaded ? (
                 <div className="text-center text-gray-400">Loading answers...</div>
               ) : answers.length === 0 ? (
                 <div className="text-center text-gray-400">No answers submitted yet.</div>
