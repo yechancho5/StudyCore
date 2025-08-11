@@ -22,6 +22,7 @@ const RoomPage = () => {
   const [fetchingAnswers, setFetchingAnswers] = useState(false);
   const [answersLoaded, setAnswersLoaded] = useState(false);
   const [readyForNextQuestion, setReadyForNextQuestion] = useState(false);
+  const [hasSavedAnswer, setHasSavedAnswer] = useState(false);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -73,8 +74,10 @@ const RoomPage = () => {
         return prevRoom;
       });
       
-      // Only update question input if it's empty (don't overwrite user input)
-      setQuestionInput(prev => prev || data.question || '');
+      // Only update question input if it's empty and we're not ready for next question
+      if (!readyForNextQuestion) {
+        setQuestionInput(prev => prev || data.question || '');
+      }
       
       // Only update revealed state if it changed
       setRevealed(prev => {
@@ -236,6 +239,7 @@ const RoomPage = () => {
       setAnswers([]); // Clear answers for new question
       setAnswersLoaded(false); // Reset answers loaded state
       setReadyForNextQuestion(false); // Reset ready state
+      setHasSavedAnswer(false); // Reset saved answer state for new question
       
       // Notify other users immediately
       localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
@@ -273,6 +277,7 @@ const RoomPage = () => {
       };
       setAnswers(prev => [...prev, newAnswer]);
       setSaved(true);
+      setHasSavedAnswer(true); // Mark that user has saved an answer
       setTimeout(() => setSaved(false), 2000);
       setAnswer(''); // Clear the input
       
@@ -411,6 +416,11 @@ const RoomPage = () => {
           {!room?.question ? (
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
               Wait for the host to post a question before you can answer.
+            </div>
+          ) : hasSavedAnswer ? (
+            <div className="bg-green-50 border border-green-200 p-4 rounded-lg shadow-sm">
+              <div className="text-green-700 text-sm font-medium mb-2">Your saved answer:</div>
+              <div className="text-gray-800 whitespace-pre-line">{answers.find(a => a.userId === getOrCreateUserId())?.text || 'Answer saved!'}</div>
             </div>
           ) : (
             <>
