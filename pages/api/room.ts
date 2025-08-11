@@ -8,7 +8,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!hostId) {
       return res.status(400).json({ error: 'hostId is required' });
     }
+    // Debug environment variables
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.log('DATABASE_URL starts with:', process.env.DATABASE_URL?.substring(0, 20));
+    
     try {
+      console.log('Attempting to create room with hostId:', hostId);
       const room = await prisma.room.create({
         data: {
           id: uuidv4(),
@@ -18,8 +24,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           hostId, // Use the hostId from the request body
         },
       });
+      console.log('Room created successfully:', room.id);
       return res.status(201).json(room);
     } catch (error) {
+      console.error('Failed to create room:', error);
       return res.status(500).json({ error: 'Failed to create room', details: error });
     }
   } else {
