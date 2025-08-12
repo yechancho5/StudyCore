@@ -32,14 +32,9 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
   };
 
   const hasAnswered = (userId: string) => {
-    // Find the user in the users array to get their database ID
-    const user = users.find(u => u.userId === userId);
-    if (!user) return false;
-    
-    // Check if this user has an answer using their database ID
-    const hasAnswer = answers.some(answer => answer.userId === user.id);
-    console.log(`User ${userId} (${user.username}) has answered: ${hasAnswer}`, {
-      userDbId: user.id,
+    // Check if this user has an answer using their localStorage userId
+    const hasAnswer = answers.some(answer => answer.userId === userId);
+    console.log(`User ${userId} has answered: ${hasAnswer}`, {
       answers: answers.map(a => ({ answerUserId: a.userId, answerUsername: a.username }))
     });
     return hasAnswer;

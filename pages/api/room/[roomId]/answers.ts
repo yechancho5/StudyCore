@@ -9,9 +9,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const answers = await prisma.answer.findMany({
         where: { roomId },
+        include: {
+          user: true, // Include the user data
+        },
         orderBy: { timestamp: 'asc' },
       });
-      return res.status(200).json(answers);
+      
+      // Transform the data to include the localStorage userId
+      const transformedAnswers = answers.map(answer => ({
+        ...answer,
+        userId: answer.user?.userId || answer.userId, // Use localStorage userId for frontend compatibility
+      }));
+      
+      return res.status(200).json(transformedAnswers);
     } catch (error) {
       return res.status(500).json({ error: 'Failed to fetch answers', details: error });
     }
