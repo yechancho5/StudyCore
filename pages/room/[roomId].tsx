@@ -176,6 +176,21 @@ const RoomPage = () => {
     }
   }, [roomId, username]);
 
+  // Update user's lastSeen (heartbeat)
+  const updateUserHeartbeat = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string' || !username) return;
+    const userId = getOrCreateUserId();
+    try {
+      await fetch(`/api/room/${roomId}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, username }),
+      });
+    } catch (err) {
+      // Silently fail for heartbeat
+    }
+  }, [roomId, username]);
+
   // Use refs to store stable references to the fetch functions
   const fetchRoomRef = useRef(fetchRoom);
   const pollRoomRef = useRef(pollRoom);
@@ -261,20 +276,23 @@ const RoomPage = () => {
 
   // Separate effect for answers polling
   useEffect(() => {
-    if (!roomId || typeof roomId !== 'string' || !revealed) return;
+    if (!roomId || typeof roomId !== 'string') return;
     
-    // Initial fetch with loading state
-    fetchAnswersRef.current();
-    
-    // Set up polling only if POLL_INTERVAL > 0
-    if (POLL_INTERVAL > 0) {
-      const interval = setInterval(() => {
-        pollAnswersRef.current();
-      }, POLL_INTERVAL);
+    // If there's a question, fetch answers to show status
+    if (room?.question && !revealed) {
+      // Initial fetch with loading state
+      fetchAnswersRef.current();
       
-      return () => clearInterval(interval);
+      // Set up polling only if POLL_INTERVAL > 0
+      if (POLL_INTERVAL > 0) {
+        const interval = setInterval(() => {
+          pollAnswersRef.current();
+        }, POLL_INTERVAL);
+        
+        return () => clearInterval(interval);
+      }
     }
-  }, [roomId, revealed]); // Only depend on roomId and revealed
+  }, [roomId, room?.question, revealed]); // Depend on roomId, question, and revealed
 
   // Username logic
   useEffect(() => {
@@ -295,6 +313,18 @@ const RoomPage = () => {
       joinRoom();
     }
   }, [username, roomId, joinRoom]);
+
+  // Heartbeat to update user's lastSeen
+  useEffect(() => {
+    if (!username || !roomId || typeof roomId !== 'string') return;
+    
+    // Send heartbeat every 30 seconds
+    const heartbeatInterval = setInterval(() => {
+      updateUserHeartbeat();
+    }, 30000);
+    
+    return () => clearInterval(heartbeatInterval);
+  }, [username, roomId, updateUserHeartbeat]);
 
   // Track previous question to detect changes (for non-hosts)
   const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);

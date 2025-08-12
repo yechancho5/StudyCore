@@ -28,7 +28,7 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
   const isOnline = (lastSeen: string) => {
     const lastSeenTime = new Date(lastSeen).getTime();
     const now = Date.now();
-    return now - lastSeenTime < 30000; // 30 seconds
+    return now - lastSeenTime < 120000; // 2 minutes
   };
 
   const hasAnswered = (userId: string) => {
@@ -114,7 +114,7 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
                       online ? 'bg-green-500' : 'bg-gray-400'
                     }`} />
                     <span className="text-xs text-gray-500">
-                      {online ? 'Online' : 'Offline'}
+                      {online ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                 </div>
