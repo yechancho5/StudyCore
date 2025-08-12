@@ -23,8 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'userId, username, and text are required' });
     }
     try {
-      // Ensure user exists in the room
-      await prisma.user.upsert({
+      // Ensure user exists in the room and get their database ID
+      const user = await prisma.user.upsert({
         where: { userId_roomId: { userId, roomId } },
         update: { lastSeen: new Date() },
         create: {
@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const answer = await prisma.answer.create({
         data: {
           roomId,
-          userId,
+          userId: user.id, // Use the database User.id, not the localStorage userId
           username,
           text,
           timestamp: new Date(),

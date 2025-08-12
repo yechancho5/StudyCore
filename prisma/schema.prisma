@@ -21,7 +21,7 @@ model Room {
 
 model User {
   id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique // This is the localStorage userId
+  userId    String   // This is the localStorage userId (not globally unique)
   username  String
   roomId    String   @db.Uuid
   room      Room     @relation("RoomParticipants", fields: [roomId], references: [id], onDelete: Cascade)
@@ -29,17 +29,17 @@ model User {
   answers   Answer[]
   createdAt DateTime @default(now())
 
-  @@unique([userId, roomId])
+  @@unique([userId, roomId]) // User can only be in one room at a time
 }
 
 model Answer {
   id        String   @id @default(uuid()) @db.Uuid
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   roomId    String   @db.Uuid
-  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @db.Uuid
   username  String
   text      String
   timestamp DateTime @default(now())
   revealed  Boolean  @default(false)
-  user      User?    @relation(fields: [userId], references: [userId])
 }

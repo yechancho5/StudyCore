@@ -136,12 +136,14 @@ const RoomPage = () => {
     if (!roomId || typeof roomId !== 'string') return;
     setFetchingUsers(true);
     try {
+      console.log('Fetching users for room:', roomId);
       const res = await fetch(`/api/room/${roomId}/users`);
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
+      console.log('Fetched users:', data);
       setUsers(data);
     } catch (err) {
-      // Optionally set error
+      console.error('Failed to fetch users:', err);
     } finally {
       setFetchingUsers(false);
     }
@@ -154,9 +156,10 @@ const RoomPage = () => {
       const res = await fetch(`/api/room/${roomId}/users`);
       if (!res.ok) return; // Don't set error for polling
       const data = await res.json();
+      console.log('Polled users:', data);
       setUsers(data);
     } catch (err) {
-      // Silently fail for polling
+      console.error('Failed to poll users:', err);
     }
   }, [roomId]);
 
@@ -165,14 +168,24 @@ const RoomPage = () => {
     if (!roomId || typeof roomId !== 'string' || !username) return;
     const userId = getOrCreateUserId();
     try {
+      console.log('Joining room:', { roomId, userId, username });
+      
+      // First check if room exists
+      const roomCheck = await fetch(`/api/room/${roomId}`);
+      if (!roomCheck.ok) {
+        console.log('Room does not exist yet, will retry later');
+        return; // Don't throw error, just return and let polling handle it
+      }
+      
       const res = await fetch(`/api/room/${roomId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, username }),
       });
       if (!res.ok) throw new Error('Failed to join room');
+      console.log('Successfully joined room');
     } catch (err) {
-      // Silently fail for joining
+      console.error('Failed to join room:', err);
     }
   }, [roomId, username]);
 
@@ -181,13 +194,14 @@ const RoomPage = () => {
     if (!roomId || typeof roomId !== 'string' || !username) return;
     const userId = getOrCreateUserId();
     try {
+      console.log('Sending heartbeat:', { roomId, userId, username });
       await fetch(`/api/room/${roomId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, username }),
       });
     } catch (err) {
-      // Silently fail for heartbeat
+      console.error('Heartbeat failed:', err);
     }
   }, [roomId, username]);
 
@@ -198,6 +212,7 @@ const RoomPage = () => {
   const pollAnswersRef = useRef(pollAnswers);
   const fetchUsersRef = useRef(fetchUsers);
   const pollUsersRef = useRef(pollUsers);
+  const updateUserHeartbeatRef = useRef(updateUserHeartbeat);
   
   // Update refs when functions change
   useEffect(() => {
@@ -223,6 +238,10 @@ const RoomPage = () => {
   useEffect(() => {
     pollUsersRef.current = pollUsers;
   }, [pollUsers]);
+  
+  useEffect(() => {
+    updateUserHeartbeatRef.current = updateUserHeartbeat;
+  }, [updateUserHeartbeat]);
 
   // Single polling mechanism using stable refs
   useEffect(() => {
@@ -309,8 +328,39 @@ const RoomPage = () => {
 
   // Join room when username is available
   useEffect(() => {
+    console.log('Join room effect triggered:', { username, roomId, hasUsername: !!username, hasRoomId: !!roomId });
     if (username && roomId && typeof roomId === 'string') {
+      // Try to join immediately
       joinRoom();
+      
+      // If room doesn't exist yet, retry every 2 seconds for up to 30 seconds
+      let retryCount = 0;
+      const maxRetries = 15; // 30 seconds total
+      
+      const retryInterval = setInterval(async () => {
+        retryCount++;
+        console.log(`Retry attempt ${retryCount} to join room`);
+        
+        try {
+          // Check if room exists
+          const roomCheck = await fetch(`/api/room/${roomId}`);
+          if (roomCheck.ok) {
+            console.log('Room now exists, joining...');
+            joinRoom();
+            clearInterval(retryInterval);
+          } else if (retryCount >= maxRetries) {
+            console.log('Max retries reached, stopping');
+            clearInterval(retryInterval);
+          }
+        } catch (err) {
+          console.error('Error checking room:', err);
+          if (retryCount >= maxRetries) {
+            clearInterval(retryInterval);
+          }
+        }
+      }, 2000);
+      
+      return () => clearInterval(retryInterval);
     }
   }, [username, roomId, joinRoom]);
 
@@ -320,11 +370,11 @@ const RoomPage = () => {
     
     // Send heartbeat every 30 seconds
     const heartbeatInterval = setInterval(() => {
-      updateUserHeartbeat();
+      updateUserHeartbeatRef.current();
     }, 30000);
     
     return () => clearInterval(heartbeatInterval);
-  }, [username, roomId, updateUserHeartbeat]);
+  }, [username, roomId]);
 
   // Track previous question to detect changes (for non-hosts)
   const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);

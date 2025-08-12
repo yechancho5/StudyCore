@@ -23,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
       console.log('Room created successfully:', room.id);
+      console.log('Full room data:', room);
       return res.status(201).json(room);
     } catch (error) {
       console.error('Failed to create room:', error);

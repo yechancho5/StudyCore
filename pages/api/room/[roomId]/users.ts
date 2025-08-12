@@ -33,6 +33,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userId || !username) {
       return res.status(400).json({ error: 'userId and username are required' });
     }
+    console.log('Attempting to add user to room:', { roomId, userId, username });
+    
+    // Check if room exists first
+    const room = await prisma.room.findUnique({ where: { id: roomId } });
+    if (!room) {
+      console.error('Room not found:', roomId);
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    console.log('Room found:', room.id);
+    
     try {
       // Check if user already exists in this room
       const existingUser = await prisma.user.findFirst({
@@ -41,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (existingUser) {
         // Update lastSeen and username
+        console.log('Updating existing user:', existingUser.id);
         const user = await prisma.user.update({
           where: { id: existingUser.id },
           data: { 
@@ -51,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json(user);
       } else {
         // Create new user
+        console.log('Creating new user with roomId:', roomId);
         const user = await prisma.user.create({
           data: {
             userId,
@@ -59,9 +71,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             lastSeen: new Date(),
           },
         });
+        console.log('User created successfully:', user.id);
         return res.status(201).json(user);
       }
     } catch (error) {
+      console.error('Error creating/updating user:', error);
       return res.status(500).json({ error: 'Failed to create/update user', details: error });
     }
   }
