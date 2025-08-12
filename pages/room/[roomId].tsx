@@ -646,7 +646,37 @@ const RoomPage = () => {
             <div className="bg-white shadow-2xl rounded-2xl p-8 flex flex-col gap-8">
               {/* Header with Room ID and Mobile Sidebar Toggle */}
               <div className="flex justify-between items-center mb-2">
-                <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-3 py-1 rounded-full shadow-sm border border-indigo-200">Room ID: {roomId}</span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-3 py-1 rounded-full shadow-sm border border-indigo-200">Room ID: {roomId}</span>
+                  <button
+                    onClick={() => {
+                      if (typeof roomId === 'string') {
+                        navigator.clipboard.writeText(roomId);
+                      // Optional: Show a brief toast or change button appearance
+                      const button = event?.target as HTMLButtonElement;
+                      if (button) {
+                        const originalText = button.innerHTML;
+                        button.innerHTML = `
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
+                        `;
+                        button.classList.add('text-green-600');
+                        setTimeout(() => {
+                          button.innerHTML = originalText;
+                          button.classList.remove('text-green-600');
+                        }, 1000);
+                      }
+                    }
+                  }}
+                    className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors"
+                    title="Copy Room ID to clipboard"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
                 <button
                   className="lg:hidden p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                   onClick={() => setSidebarOpen(!sidebarOpen)}
