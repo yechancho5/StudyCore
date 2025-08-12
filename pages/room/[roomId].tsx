@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
+import ParticipantsSidebar from '../../components/ParticipantsSidebar';
 
 const POLL_INTERVAL = 5000; // 5 seconds - reduce Realtime load
 
@@ -23,6 +24,9 @@ const RoomPage = () => {
   const [answersLoaded, setAnswersLoaded] = useState(false);
   const [readyForNextQuestion, setReadyForNextQuestion] = useState(false);
   const [hasSavedAnswer, setHasSavedAnswer] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [fetchingUsers, setFetchingUsers] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -127,11 +131,58 @@ const RoomPage = () => {
     }
   }, [roomId]);
 
+  // Fetch users (with loading state)
+  const fetchUsers = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    setFetchingUsers(true);
+    try {
+      const res = await fetch(`/api/room/${roomId}/users`);
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data = await res.json();
+      setUsers(data);
+    } catch (err) {
+      // Optionally set error
+    } finally {
+      setFetchingUsers(false);
+    }
+  }, [roomId]);
+
+  // Poll users (without loading state)
+  const pollUsers = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string') return;
+    try {
+      const res = await fetch(`/api/room/${roomId}/users`);
+      if (!res.ok) return; // Don't set error for polling
+      const data = await res.json();
+      setUsers(data);
+    } catch (err) {
+      // Silently fail for polling
+    }
+  }, [roomId]);
+
+  // Join room as user
+  const joinRoom = useCallback(async () => {
+    if (!roomId || typeof roomId !== 'string' || !username) return;
+    const userId = getOrCreateUserId();
+    try {
+      const res = await fetch(`/api/room/${roomId}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, username }),
+      });
+      if (!res.ok) throw new Error('Failed to join room');
+    } catch (err) {
+      // Silently fail for joining
+    }
+  }, [roomId, username]);
+
   // Use refs to store stable references to the fetch functions
   const fetchRoomRef = useRef(fetchRoom);
   const pollRoomRef = useRef(pollRoom);
   const fetchAnswersRef = useRef(fetchAnswers);
   const pollAnswersRef = useRef(pollAnswers);
+  const fetchUsersRef = useRef(fetchUsers);
+  const pollUsersRef = useRef(pollUsers);
   
   // Update refs when functions change
   useEffect(() => {
@@ -149,6 +200,14 @@ const RoomPage = () => {
   useEffect(() => {
     pollAnswersRef.current = pollAnswers;
   }, [pollAnswers]);
+  
+  useEffect(() => {
+    fetchUsersRef.current = fetchUsers;
+  }, [fetchUsers]);
+  
+  useEffect(() => {
+    pollUsersRef.current = pollUsers;
+  }, [pollUsers]);
 
   // Single polling mechanism using stable refs
   useEffect(() => {
@@ -183,6 +242,23 @@ const RoomPage = () => {
     }
   }, [roomId]); // Only depend on roomId
 
+  // Separate effect for users polling
+  useEffect(() => {
+    if (!roomId || typeof roomId !== 'string') return;
+    
+    // Initial fetch with loading state
+    fetchUsersRef.current();
+    
+    // Set up polling only if POLL_INTERVAL > 0
+    if (POLL_INTERVAL > 0) {
+      const interval = setInterval(() => {
+        pollUsersRef.current();
+      }, POLL_INTERVAL);
+      
+      return () => clearInterval(interval);
+    }
+  }, [roomId]); // Only depend on roomId
+
   // Separate effect for answers polling
   useEffect(() => {
     if (!roomId || typeof roomId !== 'string' || !revealed) return;
@@ -212,6 +288,13 @@ const RoomPage = () => {
       }
     }
   }, [queryUsername]);
+
+  // Join room when username is available
+  useEffect(() => {
+    if (username && roomId && typeof roomId === 'string') {
+      joinRoom();
+    }
+  }, [username, roomId, joinRoom]);
 
   // Track previous question to detect changes (for non-hosts)
   const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);
@@ -316,9 +399,30 @@ const RoomPage = () => {
     }
   };
 
+  // Check if everyone has answered
+  const everyoneHasAnswered = () => {
+    if (!room?.question || users.length === 0) return false;
+    
+    // Get all users except the host (host doesn't need to answer)
+    const nonHostUsers = users.filter(user => user.userId !== room.hostId);
+    if (nonHostUsers.length === 0) return true; // Only host in room
+    
+    // Check if all non-host users have answered
+    return nonHostUsers.every(user => 
+      answers.some(answer => answer.userId === user.userId)
+    );
+  };
+
   // Reveal answers (host only)
   const handleRevealAnswers = async () => {
     if (!roomId || typeof roomId !== 'string') return;
+    
+    // Check if everyone has answered
+    if (!everyoneHasAnswered()) {
+      alert('Please wait for everyone to answer before revealing.');
+      return;
+    }
+    
     try {
       const res = await fetch(`/api/room/${roomId}`, {
         method: 'PATCH',
@@ -398,132 +502,193 @@ const RoomPage = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-gradient-to-br from-indigo-100 via-blue-100 to-purple-200 py-10">
-      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-2xl flex flex-col gap-8">
-        {/* Room ID badge */}
-        <div className="flex justify-center mb-2">
-          <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-3 py-1 rounded-full shadow-sm border border-indigo-200">Room ID: {roomId}</span>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-100 to-purple-200 py-10">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex gap-6">
+          {/* Main Content */}
+          <div className="flex-1">
+            <div className="bg-white shadow-2xl rounded-2xl p-8 flex flex-col gap-8">
+              {/* Header with Room ID and Mobile Sidebar Toggle */}
+              <div className="flex justify-between items-center mb-2">
+                <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-3 py-1 rounded-full shadow-sm border border-indigo-200">Room ID: {roomId}</span>
+                <button
+                  className="lg:hidden p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                  </svg>
+                </button>
+              </div>
+              {/* Welcome */}
+              <div className="text-center mb-2">
+                <h1 className="text-3xl font-extrabold text-gray-800">Welcome{username ? `, ${username}` : ''}!</h1>
+                <div className="text-gray-500 text-base mt-1">Collaborate and study together in real time.</div>
+              </div>
+              {/* Study Question Section */}
+              <div className="flex flex-col gap-2 mb-6">
+                <div className="text-lg font-semibold mb-1">Study Question</div>
+                {isHost ? (
+                  <div>
+                    {/* Show question input when no question exists or when ready for next question */}
+                    {(!room?.question || (revealed && readyForNextQuestion)) ? (
+                      <>
+                        {revealed && readyForNextQuestion && (
+                          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-green-700 text-sm font-medium">Ready for the next question! Enter a new question to start the next round.</p>
+                          </div>
+                        )}
+                        <textarea
+                          className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition mb-2 resize-none"
+                          value={questionInput}
+                          onChange={e => setQuestionInput(e.target.value)}
+                          placeholder="Enter a question for the room"
+                          rows={3}
+                        />
+                        <button
+                          className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 transition disabled:opacity-60 mb-2"
+                          onClick={handlePostQuestion}
+                          disabled={posting || !questionInput.trim()}
+                        >
+                          {posting ? 'Posting...' : 'Post Question'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg shadow-sm min-h-[48px] text-lg text-gray-800 font-medium">
+                        {room?.question ? room.question : <span className="text-gray-400">No question posted yet.</span>}
+                      </div>
+                    )}
+                    {/* Reveal Answers Button for Host */}
+                    {!revealed && !!room?.question && (
+                      <button
+                        className={`w-full mt-2 font-semibold py-3 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-offset-2 transition ${
+                          everyoneHasAnswered() 
+                            ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-400' 
+                            : 'bg-gray-400 text-white cursor-not-allowed'
+                        }`}
+                        onClick={handleRevealAnswers}
+                        disabled={!everyoneHasAnswered()}
+                      >
+                        {everyoneHasAnswered() ? 'Reveal Answers' : 'Waiting for everyone to answer...'}
+                      </button>
+                    )}
+                    
+                    {/* Next Question Button for Host */}
+                    {revealed && !readyForNextQuestion && (
+                      <button
+                        className="w-full mt-2 bg-blue-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
+                        onClick={handleNextQuestion}
+                      >
+                        Next Question
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg shadow-sm min-h-[48px] text-lg text-gray-800 font-medium">
+                    {room?.question ? room.question : <span className="text-gray-400">No question posted yet.</span>}
+                  </div>
+                )}
+              </div>
+              {/* Private Answer Pad */}
+              <div className="flex flex-col gap-2 mb-6">
+                <div className="text-lg font-semibold mb-1">Your Private Answer</div>
+                {!room?.question ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
+                    Wait for the host to post a question before you can answer.
+                  </div>
+                ) : hasSavedAnswer ? (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg shadow-sm">
+                    <div className="text-green-700 text-sm font-medium mb-2">Your saved answer:</div>
+                    <div className="text-gray-800 whitespace-pre-line">{answers.find(a => a.userId === getOrCreateUserId())?.text || 'Answer saved!'}</div>
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
+                      value={answer}
+                      onChange={e => setAnswer(e.target.value)}
+                      placeholder="Write your answer here..."
+                      rows={5}
+                    />
+                    <button
+                      className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:opacity-60"
+                      onClick={handleSaveAnswer}
+                      disabled={saving || !answer.trim()}
+                    >
+                      {saving ? 'Saving...' : 'Save Answer'}
+                    </button>
+                    {saved && <span className="text-green-600 font-semibold ml-2">Saved!</span>}
+                  </>
+                )}
+              </div>
+              {/* Revealed Answers Section */}
+              <div className="mt-8">
+                {revealed ? (
+                  <div>
+                    <h2 className="text-2xl font-bold mb-4 text-center text-indigo-700">Revealed Answers</h2>
+                    {fetchingAnswers && !answersLoaded ? (
+                      <div className="text-center text-gray-400">Loading answers...</div>
+                    ) : answers.length === 0 ? (
+                      <div className="text-center text-gray-400">No answers submitted yet.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {answers.map(ans => (
+                          <div key={ans.id} className="bg-white border border-gray-200 rounded-xl shadow-md p-5 flex flex-col gap-2 hover:shadow-lg transition">
+                            <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-2 py-1 rounded-full w-fit">{ans.username}</span>
+                            <div className="mt-1 text-gray-800 whitespace-pre-line text-base">{ans.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-gray-400 text-center">Answers hidden until reveal.</div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Desktop Sidebar */}
+          <div className="hidden lg:block">
+            <ParticipantsSidebar
+              users={users}
+              hostId={room?.hostId || ''}
+              currentUserId={getOrCreateUserId()}
+              answers={answers}
+              question={room?.question || null}
+              revealed={revealed}
+            />
+          </div>
         </div>
-        {/* Welcome */}
-        <div className="text-center mb-2">
-          <h1 className="text-3xl font-extrabold text-gray-800">Welcome{username ? `, ${username}` : ''}!</h1>
-          <div className="text-gray-500 text-base mt-1">Collaborate and study together in real time.</div>
-        </div>
-        {/* Study Question Section */}
-        <div className="flex flex-col gap-2 mb-6">
-          <div className="text-lg font-semibold mb-1">Study Question</div>
-          {isHost ? (
-            <div>
-              {/* Show question input when no question exists or when ready for next question */}
-              {(!room?.question || (revealed && readyForNextQuestion)) ? (
-                <>
-                  {revealed && readyForNextQuestion && (
-                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-green-700 text-sm font-medium">Ready for the next question! Enter a new question to start the next round.</p>
-                    </div>
-                  )}
-                  <textarea
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition mb-2 resize-none"
-                    value={questionInput}
-                    onChange={e => setQuestionInput(e.target.value)}
-                    placeholder="Enter a question for the room"
-                    rows={3}
-                  />
+        
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden">
+            <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-lg">
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Participants</h3>
                   <button
-                    className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 transition disabled:opacity-60 mb-2"
-                    onClick={handlePostQuestion}
-                    disabled={posting || !questionInput.trim()}
+                    className="p-2 text-gray-500 hover:text-gray-700"
+                    onClick={() => setSidebarOpen(false)}
                   >
-                    {posting ? 'Posting...' : 'Post Question'}
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
-                </>
-              ) : (
-                <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg shadow-sm min-h-[48px] text-lg text-gray-800 font-medium">
-                  {room?.question ? room.question : <span className="text-gray-400">No question posted yet.</span>}
                 </div>
-              )}
-              {/* Reveal Answers Button for Host */}
-              {!revealed && !!room?.question && (
-                <button
-                  className="w-full mt-2 bg-red-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 transition"
-                  onClick={handleRevealAnswers}
-                >
-                  Reveal Answers
-                </button>
-              )}
-              
-              {/* Next Question Button for Host */}
-              {revealed && !readyForNextQuestion && (
-                <button
-                  className="w-full mt-2 bg-blue-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
-                  onClick={handleNextQuestion}
-                >
-                  Next Question
-                </button>
-              )}
+                <ParticipantsSidebar
+                  users={users}
+                  hostId={room?.hostId || ''}
+                  currentUserId={getOrCreateUserId()}
+                  answers={answers}
+                  question={room?.question || null}
+                  revealed={revealed}
+                />
+              </div>
             </div>
-          ) : (
-            <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg shadow-sm min-h-[48px] text-lg text-gray-800 font-medium">
-              {room?.question ? room.question : <span className="text-gray-400">No question posted yet.</span>}
-            </div>
-          )}
-        </div>
-        {/* Private Answer Pad */}
-        <div className="flex flex-col gap-2 mb-6">
-          <div className="text-lg font-semibold mb-1">Your Private Answer</div>
-          {!room?.question ? (
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
-              Wait for the host to post a question before you can answer.
-            </div>
-          ) : hasSavedAnswer ? (
-            <div className="bg-green-50 border border-green-200 p-4 rounded-lg shadow-sm">
-              <div className="text-green-700 text-sm font-medium mb-2">Your saved answer:</div>
-              <div className="text-gray-800 whitespace-pre-line">{answers.find(a => a.userId === getOrCreateUserId())?.text || 'Answer saved!'}</div>
-            </div>
-          ) : (
-            <>
-              <textarea
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
-                value={answer}
-                onChange={e => setAnswer(e.target.value)}
-                placeholder="Write your answer here..."
-                rows={5}
-              />
-              <button
-                className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:opacity-60"
-                onClick={handleSaveAnswer}
-                disabled={saving || !answer.trim()}
-              >
-                {saving ? 'Saving...' : 'Save Answer'}
-              </button>
-              {saved && <span className="text-green-600 font-semibold ml-2">Saved!</span>}
-            </>
-          )}
-        </div>
-        {/* Revealed Answers Section */}
-        <div className="mt-8">
-          {revealed ? (
-            <div>
-              <h2 className="text-2xl font-bold mb-4 text-center text-indigo-700">Revealed Answers</h2>
-              {fetchingAnswers && !answersLoaded ? (
-                <div className="text-center text-gray-400">Loading answers...</div>
-              ) : answers.length === 0 ? (
-                <div className="text-center text-gray-400">No answers submitted yet.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {answers.map(ans => (
-                    <div key={ans.id} className="bg-white border border-gray-200 rounded-xl shadow-md p-5 flex flex-col gap-2 hover:shadow-lg transition">
-                      <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-2 py-1 rounded-full w-fit">{ans.username}</span>
-                      <div className="mt-1 text-gray-800 whitespace-pre-line text-base">{ans.text}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-gray-400 text-center">Answers hidden until reveal.</div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

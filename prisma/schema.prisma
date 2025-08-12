@@ -10,12 +10,26 @@ datasource db {
 }
 
 model Room {
-  id        String    @id @default(uuid()) @db.Uuid
-  createdAt DateTime  @default(now())
-  question  String?   // optional
-  revealed  Boolean   @default(false)
-  hostId    String
+  id           String    @id @default(uuid()) @db.Uuid
+  createdAt    DateTime  @default(now())
+  question     String?   // optional
+  revealed     Boolean   @default(false)
+  hostId       String    @db.Uuid
+  answers      Answer[]
+  participants User[]    @relation("RoomParticipants")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique // This is the localStorage userId
+  username  String
+  roomId    String   @db.Uuid
+  room      Room     @relation("RoomParticipants", fields: [roomId], references: [id], onDelete: Cascade)
+  lastSeen  DateTime @default(now())
   answers   Answer[]
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roomId])
 }
 
 model Answer {
@@ -27,4 +41,5 @@ model Answer {
   text      String
   timestamp DateTime @default(now())
   revealed  Boolean  @default(false)
+  user      User?    @relation(fields: [userId], references: [userId])
 }
