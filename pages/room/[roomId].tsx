@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
 import ParticipantsSidebar from '../../components/ParticipantsSidebar';
+import KickModal from '../../components/KickModal';
 
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
@@ -27,6 +28,11 @@ const RoomPage = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [fetchingUsers, setFetchingUsers] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [kickModal, setKickModal] = useState<{ isOpen: boolean; targetUserId: string; username: string }>({
+    isOpen: false,
+    targetUserId: '',
+    username: ''
+  });
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -160,10 +166,19 @@ const RoomPage = () => {
       const data = await res.json();
       console.log('Polled users:', data);
       setUsers(data);
+      
+      // Check if current user has been kicked
+      const currentUserId = getOrCreateUserId();
+      const isUserStillInRoom = data.some((user: any) => user.userId === currentUserId);
+      if (!isUserStillInRoom && data.length > 0) {
+        // User has been kicked, redirect to home
+        alert('You have been kicked from the room.');
+        router.push('/');
+      }
     } catch (err) {
       console.error('Failed to poll users:', err);
     }
-  }, [roomId]);
+  }, [roomId, router]);
 
   // Join room as user
   const joinRoom = useCallback(async () => {
@@ -528,12 +543,12 @@ const RoomPage = () => {
   };
 
   // Kick user (host only)
-  const handleKickUser = async (targetUserId: string) => {
+  const handleKickUser = async (targetUserId: string, username: string) => {
+    setKickModal({ isOpen: true, targetUserId, username });
+  };
+
+  const handleKickConfirm = async () => {
     if (!roomId || typeof roomId !== 'string') return;
-    
-    if (!confirm(`Are you sure you want to kick this user from the room?`)) {
-      return;
-    }
     
     try {
       const res = await fetch(`/api/room/${roomId}/kick`, {
@@ -541,7 +556,7 @@ const RoomPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           hostId: getOrCreateUserId(),
-          targetUserId 
+          targetUserId: kickModal.targetUserId
         }),
       });
       
@@ -552,9 +567,17 @@ const RoomPage = () => {
       
       // The user will be removed from the database, and polling will update the UI
       console.log('User kicked successfully');
+      
+      // Close the modal
+      setKickModal({ isOpen: false, targetUserId: '', username: '' });
     } catch (err: any) {
       alert(`Failed to kick user: ${err.message}`);
+      setKickModal({ isOpen: false, targetUserId: '', username: '' });
     }
+  };
+
+  const handleKickCancel = () => {
+    setKickModal({ isOpen: false, targetUserId: '', username: '' });
   };
 
   // Next question button (host only)
@@ -804,6 +827,14 @@ const RoomPage = () => {
           </div>
         )}
       </div>
+      
+      {/* Kick Modal */}
+      <KickModal
+        isOpen={kickModal.isOpen}
+        onClose={handleKickCancel}
+        onConfirm={handleKickConfirm}
+        username={kickModal.username}
+      />
     </div>
   );
 };

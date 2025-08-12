@@ -15,7 +15,7 @@ interface ParticipantsSidebarProps {
   answers: any[];
   question: string | null;
   revealed: boolean;
-  onKickUser?: (userId: string) => void;
+  onKickUser?: (userId: string, username: string) => void;
 }
 
 const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
@@ -140,7 +140,7 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
                 {/* Kick Button (only for host, not for themselves) */}
                 {isCurrentUserHost && !isHost && onKickUser && (
                   <button
-                    onClick={() => onKickUser(user.userId)}
+                    onClick={() => onKickUser(user.userId, user.username)}
                     className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
                     title={`Kick ${user.username}`}
                   >
