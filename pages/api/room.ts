@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '../../lib/prisma';
+import { prisma, prismaWithRetry } from '../../lib/prisma';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -14,13 +14,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     try {
       console.log('Attempting to create room with hostId:', hostId);
-      const room = await prisma.room.create({
-        data: {
-          createdAt: new Date(),
-          question: null,
-          revealed: false,
-          hostId, // Use the hostId from the request body
-        },
+      const room = await prismaWithRetry(async () => {
+        return await prisma.room.create({
+          data: {
+            createdAt: new Date(),
+            question: null,
+            revealed: false,
+            hostId, // Use the hostId from the request body
+          },
+        });
       });
       console.log('Room created successfully:', room.id);
       console.log('Full room data:', room);
