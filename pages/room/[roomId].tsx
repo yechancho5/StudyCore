@@ -109,6 +109,7 @@ const RoomPage = () => {
       const res = await fetch(`/api/room/${roomId}/answers`);
       if (!res.ok) throw new Error('Failed to fetch answers');
       const data = await res.json();
+      console.log('Fetched answers:', data);
       setAnswers(data);
       setAnswersLoaded(true);
     } catch (err) {
@@ -125,6 +126,7 @@ const RoomPage = () => {
       const res = await fetch(`/api/room/${roomId}/answers`);
       if (!res.ok) return; // Don't set error for polling
       const data = await res.json();
+      console.log('Polled answers:', data);
       setAnswers(data);
     } catch (err) {
       // Silently fail for polling

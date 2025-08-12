@@ -8,6 +8,7 @@ const LandingPage = () => {
   const [roomId, setRoomId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -53,6 +54,13 @@ const LandingPage = () => {
     router.push(`/room/${roomId}?username=${encodeURIComponent(username)}`);
   };
 
+  const handleBackToSelect = () => {
+    setMode('select');
+    setError('');
+    setUsername('');
+    setRoomId('');
+  };
+
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-green-100 via-emerald-100 to-lime-100 overflow-hidden">
       {/* Blurred Glow Background */}
@@ -71,58 +79,133 @@ const LandingPage = () => {
             </svg>
           </span>
         </div>
-        {/* Title & Subtitle */}
-        <div className="flex flex-col gap-2 text-center">
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">StudyCore</h1>
-          <p className="text-gray-500 text-lg">Join or create a room to study together in real time.</p>
-        </div>
-        {/* Inputs */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="block text-gray-700 font-medium mb-1" htmlFor="username">Username <span className="text-red-500">*</span></label>
-            <input
-              id="username"
-              type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition placeholder-gray-400 bg-white/90"
-              value={username}
-              onChange={e => { setUsername(e.target.value); setError(''); }}
-              required
-              placeholder="Enter your name"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 font-medium mb-1" htmlFor="roomId">Room ID</label>
-            <input
-              id="roomId"
-              type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition placeholder-gray-400 bg-white/90"
-              value={roomId}
-              onChange={e => { setRoomId(e.target.value); setError(''); }}
-              placeholder="Enter Room ID to join (optional)"
-            />
-          </div>
-          {error && (
-            <div className="text-red-500 text-sm text-center font-medium animate-shake">
-              {error}
+
+        {mode === 'select' && (
+          <>
+            {/* Title & Subtitle */}
+            <div className="flex flex-col gap-2 text-center">
+              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">StudyCore</h1>
+              <p className="text-gray-500 text-lg">Join or create a room to study together in real time.</p>
             </div>
-          )}
-        </div>
-        {/* Buttons */}
-        <div className="flex flex-col gap-3 mt-2">
-          <button
-            className="w-full bg-emerald-500 text-white font-semibold py-3 rounded-xl shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105 disabled:opacity-60"
-            onClick={handleCreateRoom}
-            disabled={loading}
-          >
-            {loading ? 'Creating...' : 'Create Room'}
-          </button>
-          <button
-            className="w-full bg-white border border-emerald-200 text-emerald-700 font-semibold py-3 rounded-xl shadow hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105"
-            onClick={handleJoinRoom}
-          >
-            Join Room
-          </button>
-        </div>
+            {/* Buttons */}
+            <div className="flex flex-col gap-4 mt-2">
+              <button
+                className="w-full bg-emerald-500 text-white font-semibold py-4 rounded-xl shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105"
+                onClick={() => setMode('create')}
+              >
+                Create Room
+              </button>
+              <button
+                className="w-full bg-white border border-emerald-200 text-emerald-700 font-semibold py-4 rounded-xl shadow hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105"
+                onClick={() => setMode('join')}
+              >
+                Join Room
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'create' && (
+          <>
+            {/* Title & Subtitle */}
+            <div className="flex flex-col gap-2 text-center">
+              <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Create Room</h1>
+              <p className="text-gray-500">Enter your name to create a new study room.</p>
+            </div>
+            {/* Inputs */}
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-gray-700 font-medium mb-1" htmlFor="username">Username <span className="text-red-500">*</span></label>
+                <input
+                  id="username"
+                  type="text"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition placeholder-gray-400 bg-white/90"
+                  value={username}
+                  onChange={e => { setUsername(e.target.value); setError(''); }}
+                  required
+                  placeholder="Enter your name"
+                />
+              </div>
+              {error && (
+                <div className="text-red-500 text-sm text-center font-medium animate-shake">
+                  {error}
+                </div>
+              )}
+            </div>
+            {/* Buttons */}
+            <div className="flex flex-col gap-3 mt-2">
+              <button
+                className="w-full bg-emerald-500 text-white font-semibold py-3 rounded-xl shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105 disabled:opacity-60"
+                onClick={handleCreateRoom}
+                disabled={loading}
+              >
+                {loading ? 'Creating...' : 'Create Room'}
+              </button>
+              <button
+                className="w-full bg-gray-100 text-gray-600 font-medium py-2 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition"
+                onClick={handleBackToSelect}
+              >
+                ← Back
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'join' && (
+          <>
+            {/* Title & Subtitle */}
+            <div className="flex flex-col gap-2 text-center">
+              <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Join Room</h1>
+              <p className="text-gray-500">Enter your name and the room ID to join an existing study room.</p>
+            </div>
+            {/* Inputs */}
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-gray-700 font-medium mb-1" htmlFor="username">Username <span className="text-red-500">*</span></label>
+                <input
+                  id="username"
+                  type="text"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition placeholder-gray-400 bg-white/90"
+                  value={username}
+                  onChange={e => { setUsername(e.target.value); setError(''); }}
+                  required
+                  placeholder="Enter your name"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1" htmlFor="roomId">Room ID <span className="text-red-500">*</span></label>
+                <input
+                  id="roomId"
+                  type="text"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition placeholder-gray-400 bg-white/90"
+                  value={roomId}
+                  onChange={e => { setRoomId(e.target.value); setError(''); }}
+                  placeholder="Enter Room ID"
+                />
+              </div>
+              {error && (
+                <div className="text-red-500 text-sm text-center font-medium animate-shake">
+                  {error}
+                </div>
+              )}
+            </div>
+            {/* Buttons */}
+            <div className="flex flex-col gap-3 mt-2">
+              <button
+                className="w-full bg-emerald-500 text-white font-semibold py-3 rounded-xl shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition hover:scale-105"
+                onClick={handleJoinRoom}
+              >
+                Join Room
+              </button>
+              <button
+                className="w-full bg-gray-100 text-gray-600 font-medium py-2 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition"
+                onClick={handleBackToSelect}
+              >
+                ← Back
+              </button>
+            </div>
+          </>
+        )}
       </main>
       {/* Animations */}
       <style jsx global>{`
