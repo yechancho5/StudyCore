@@ -489,7 +489,7 @@ const RoomPage = () => {
     
     // Check if all non-host users have answered
     return nonHostUsers.every(user => 
-      answers.some(answer => answer.userId === user.userId)
+      answers.some(answer => answer.userId === user.id) // Use user.id (database ID), not user.userId (localStorage ID)
     );
   };
 
