@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '../../lib/prisma';
-import { v4 as uuidv4 } from 'uuid';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -17,7 +16,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Attempting to create room with hostId:', hostId);
       const room = await prisma.room.create({
         data: {
-          id: uuidv4(),
           createdAt: new Date(),
           question: null,
           revealed: false,
