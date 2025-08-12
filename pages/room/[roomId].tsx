@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
 import ParticipantsSidebar from '../../components/ParticipantsSidebar';
 import KickModal from '../../components/KickModal';
+import KickedModal from '../../components/KickedModal';
 
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
@@ -33,6 +34,7 @@ const RoomPage = () => {
     targetUserId: '',
     username: ''
   });
+  const [hasBeenKicked, setHasBeenKicked] = useState(false);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -159,7 +161,7 @@ const RoomPage = () => {
 
   // Poll users (without loading state)
   const pollUsers = useCallback(async () => {
-    if (!roomId || typeof roomId !== 'string') return;
+    if (!roomId || typeof roomId !== 'string' || hasBeenKicked) return;
     try {
       const res = await fetch(`/api/room/${roomId}/users`);
       if (!res.ok) return; // Don't set error for polling
@@ -171,18 +173,17 @@ const RoomPage = () => {
       const currentUserId = getOrCreateUserId();
       const isUserStillInRoom = data.some((user: any) => user.userId === currentUserId);
       if (!isUserStillInRoom && data.length > 0) {
-        // User has been kicked, redirect to home
-        alert('You have been kicked from the room.');
-        router.push('/');
+        // User has been kicked, show kicked modal
+        setHasBeenKicked(true);
       }
     } catch (err) {
       console.error('Failed to poll users:', err);
     }
-  }, [roomId, router]);
+  }, [roomId, hasBeenKicked]);
 
   // Join room as user
   const joinRoom = useCallback(async () => {
-    if (!roomId || typeof roomId !== 'string' || !username) return;
+    if (!roomId || typeof roomId !== 'string' || !username || hasBeenKicked) return;
     const userId = getOrCreateUserId();
     try {
       console.log('Joining room:', { roomId, userId, username });
@@ -204,11 +205,11 @@ const RoomPage = () => {
     } catch (err) {
       console.error('Failed to join room:', err);
     }
-  }, [roomId, username]);
+  }, [roomId, username, hasBeenKicked]);
 
   // Update user's lastSeen (heartbeat)
   const updateUserHeartbeat = useCallback(async () => {
-    if (!roomId || typeof roomId !== 'string' || !username) return;
+    if (!roomId || typeof roomId !== 'string' || !username || hasBeenKicked) return;
     const userId = getOrCreateUserId();
     try {
       console.log('Sending heartbeat:', { roomId, userId, username });
@@ -220,7 +221,7 @@ const RoomPage = () => {
     } catch (err) {
       console.error('Heartbeat failed:', err);
     }
-  }, [roomId, username]);
+  }, [roomId, username, hasBeenKicked]);
 
   // Use refs to store stable references to the fetch functions
   const fetchRoomRef = useRef(fetchRoom);
@@ -262,7 +263,7 @@ const RoomPage = () => {
 
   // Single polling mechanism using stable refs
   useEffect(() => {
-    if (!roomId || typeof roomId !== 'string') return;
+    if (!roomId || typeof roomId !== 'string' || hasBeenKicked) return;
     
     // Initial fetch
     fetchRoomRef.current();
@@ -308,7 +309,7 @@ const RoomPage = () => {
       
       return () => clearInterval(interval);
     }
-  }, [roomId]); // Only depend on roomId
+  }, [roomId, hasBeenKicked]); // Depend on roomId and kicked state
 
   // Separate effect for answers polling
   useEffect(() => {
@@ -328,7 +329,7 @@ const RoomPage = () => {
         return () => clearInterval(interval);
       }
     }
-  }, [roomId, room?.question]); // Depend on roomId and question, not revealed
+  }, [roomId, room?.question, hasBeenKicked]); // Depend on roomId, question, and kicked state
 
   // Username logic
   useEffect(() => {
@@ -379,7 +380,7 @@ const RoomPage = () => {
       
       return () => clearInterval(retryInterval);
     }
-  }, [username, roomId, joinRoom]);
+  }, [username, roomId, joinRoom, hasBeenKicked]);
 
   // Heartbeat to update user's lastSeen
   useEffect(() => {
@@ -391,7 +392,7 @@ const RoomPage = () => {
     }, 30000);
     
     return () => clearInterval(heartbeatInterval);
-  }, [username, roomId]);
+  }, [username, roomId, hasBeenKicked]);
 
   // Track previous question to detect changes (for non-hosts)
   const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);
@@ -835,6 +836,9 @@ const RoomPage = () => {
         onConfirm={handleKickConfirm}
         username={kickModal.username}
       />
+      
+      {/* Kicked Modal */}
+      {hasBeenKicked && <KickedModal />}
     </div>
   );
 };
