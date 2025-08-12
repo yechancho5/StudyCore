@@ -15,6 +15,7 @@ interface ParticipantsSidebarProps {
   answers: any[];
   question: string | null;
   revealed: boolean;
+  onKickUser?: (userId: string) => void;
 }
 
 const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
@@ -23,7 +24,8 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
   currentUserId,
   answers,
   question,
-  revealed
+  revealed,
+  onKickUser
 }) => {
   const isOnline = (lastSeen: string) => {
     const lastSeenTime = new Date(lastSeen).getTime();
@@ -85,6 +87,7 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
         {users.map((user) => {
           const isHost = user.userId === hostId;
           const isCurrentUser = user.userId === currentUserId;
+          const isCurrentUserHost = currentUserId === hostId;
           const online = isOnline(user.lastSeen);
           const answerStatus = getAnswerStatus(user.userId);
           
@@ -125,13 +128,28 @@ const ParticipantsSidebar: React.FC<ParticipantsSidebarProps> = ({
                 </div>
               </div>
               
-              {/* Answer Status */}
-              {question && !revealed && (
-                <div className="flex-shrink-0 ml-2">
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(answerStatus)}`} 
-                       title={getStatusText(answerStatus)} />
-                </div>
-              )}
+              <div className="flex items-center space-x-2">
+                {/* Answer Status */}
+                {question && !revealed && (
+                  <div className="flex-shrink-0">
+                    <div className={`w-3 h-3 rounded-full ${getStatusColor(answerStatus)}`} 
+                         title={getStatusText(answerStatus)} />
+                  </div>
+                )}
+                
+                {/* Kick Button (only for host, not for themselves) */}
+                {isCurrentUserHost && !isHost && onKickUser && (
+                  <button
+                    onClick={() => onKickUser(user.userId)}
+                    className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                    title={`Kick ${user.username}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

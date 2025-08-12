@@ -527,6 +527,36 @@ const RoomPage = () => {
     }
   };
 
+  // Kick user (host only)
+  const handleKickUser = async (targetUserId: string) => {
+    if (!roomId || typeof roomId !== 'string') return;
+    
+    if (!confirm(`Are you sure you want to kick this user from the room?`)) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/room/${roomId}/kick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          hostId: getOrCreateUserId(),
+          targetUserId 
+        }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to kick user');
+      }
+      
+      // The user will be removed from the database, and polling will update the UI
+      console.log('User kicked successfully');
+    } catch (err: any) {
+      alert(`Failed to kick user: ${err.message}`);
+    }
+  };
+
   // Next question button (host only)
   const handleNextQuestion = async () => {
     if (!roomId || typeof roomId !== 'string') return;
@@ -739,6 +769,7 @@ const RoomPage = () => {
               answers={answers}
               question={room?.question || null}
               revealed={revealed}
+              onKickUser={handleKickUser}
             />
           </div>
         </div>
@@ -766,6 +797,7 @@ const RoomPage = () => {
                   answers={answers}
                   question={room?.question || null}
                   revealed={revealed}
+                  onKickUser={handleKickUser}
                 />
               </div>
             </div>
