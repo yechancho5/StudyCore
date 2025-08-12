@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
 import ParticipantsSidebar from '../../components/ParticipantsSidebar';
 
-const POLL_INTERVAL = 5000; // 5 seconds - reduce Realtime load
+const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
 const RoomPage = () => {
   const router = useRouter();
@@ -297,8 +297,8 @@ const RoomPage = () => {
   useEffect(() => {
     if (!roomId || typeof roomId !== 'string') return;
     
-    // If there's a question, fetch answers to show status
-    if (room?.question && !revealed) {
+    // If there's a question, fetch answers to show status (both before and after reveal)
+    if (room?.question) {
       // Initial fetch with loading state
       fetchAnswersRef.current();
       
@@ -311,7 +311,7 @@ const RoomPage = () => {
         return () => clearInterval(interval);
       }
     }
-  }, [roomId, room?.question, revealed]); // Depend on roomId, question, and revealed
+  }, [roomId, room?.question]); // Depend on roomId and question, not revealed
 
   // Username logic
   useEffect(() => {
@@ -333,9 +333,9 @@ const RoomPage = () => {
       // Try to join immediately
       joinRoom();
       
-      // If room doesn't exist yet, retry every 2 seconds for up to 30 seconds
+      // If room doesn't exist yet, retry every 1 second for up to 15 seconds
       let retryCount = 0;
-      const maxRetries = 15; // 30 seconds total
+      const maxRetries = 15; // 15 seconds total
       
       const retryInterval = setInterval(async () => {
         retryCount++;
@@ -358,7 +358,7 @@ const RoomPage = () => {
             clearInterval(retryInterval);
           }
         }
-      }, 2000);
+              }, 1000);
       
       return () => clearInterval(retryInterval);
     }
