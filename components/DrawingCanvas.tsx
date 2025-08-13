@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fabric } from 'fabric';
+import { Canvas, PencilBrush } from 'fabric';
 
 interface DrawingCanvasProps {
   width: number;
@@ -17,7 +17,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   readOnly = false
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  const fabricCanvasRef = useRef<Canvas | null>(null);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
@@ -26,7 +26,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    const canvas = new fabric.Canvas(canvasRef.current, {
+    const canvas = new Canvas(canvasRef.current, {
       width,
       height,
       backgroundColor: '#ffffff',
@@ -38,7 +38,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     fabricCanvasRef.current = canvas;
 
     // Set up drawing brush
-    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = currentColor;
     canvas.freeDrawingBrush.width = brushSize;
 
@@ -71,12 +71,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     if (currentTool === 'pen') {
       canvas.isDrawingMode = true;
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+      canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.color = currentColor;
       canvas.freeDrawingBrush.width = brushSize;
     } else if (currentTool === 'eraser') {
       canvas.isDrawingMode = true;
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+      canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.color = '#ffffff';
       canvas.freeDrawingBrush.width = brushSize * 2;
     }
