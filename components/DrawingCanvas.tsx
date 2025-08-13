@@ -26,14 +26,26 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   useEffect(() => {
     if (!canvasRef.current) return;
 
+    // Get the actual container width
+    const container = canvasRef.current.parentElement;
+    const actualWidth = container ? container.clientWidth : width;
+    const actualHeight = height;
+
     const canvas = new Canvas(canvasRef.current, {
-      width,
-      height,
+      width: actualWidth,
+      height: actualHeight,
       backgroundColor: '#ffffff',
       isDrawingMode: !readOnly,
       selection: false,
       preserveObjectStacking: true,
     });
+
+    // Set the canvas element size to match the drawing area exactly
+    canvasRef.current.width = actualWidth;
+    canvasRef.current.height = actualHeight;
+    canvasRef.current.style.width = '100%';
+    canvasRef.current.style.height = `${actualHeight}px`;
+    canvasRef.current.style.display = 'block'; // Ensure it's a block element
 
     fabricCanvasRef.current = canvas;
 
@@ -114,9 +126,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   }
 
   return (
-    <div className="border border-gray-300 rounded-lg overflow-hidden">
+    <div className="border border-gray-300 rounded-lg overflow-hidden w-full">
       {/* Toolbar */}
-      <div className="bg-gray-50 p-3 border-b border-gray-300 flex items-center gap-4">
+      <div className="bg-gray-50 p-3 border-b border-gray-300 flex items-center gap-4 flex-wrap">
         {/* Tool Selection */}
         <div className="flex items-center gap-2">
           <button
@@ -188,8 +200,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         </div>
       </div>
 
-      {/* Canvas */}
-      <canvas ref={canvasRef} />
+      {/* Canvas Container */}
+      <div className="w-full">
+        <canvas ref={canvasRef} className="w-full" />
+      </div>
     </div>
   );
 };

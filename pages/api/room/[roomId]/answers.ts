@@ -9,17 +9,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const answers = await prisma.answer.findMany({
         where: { roomId },
-        include: {
-          user: true, // Include the user data
+        select: {
+          id: true,
+          roomId: true,
+          userId: true,
+          username: true,
+          text: true,
+          timestamp: true,
+          revealed: true,
+          user: {
+            select: {
+              userId: true,
+            }
+          }
         },
         orderBy: { timestamp: 'asc' },
       });
       
-      // Transform the data to include the localStorage userId
-      const transformedAnswers = answers.map(answer => ({
-        ...answer,
-        userId: answer.user?.userId || answer.userId, // Use localStorage userId for frontend compatibility
-      }));
+      // Transform the data to include the localStorage userId and parse drawing data
+      const transformedAnswers = answers.map(answer => {
+        let parsedData = null;
+        let answerType = 'text';
+        
+        // Try to parse as drawing data (JSON)
+        try {
+          const parsed = JSON.parse(answer.text);
+          if (parsed && typeof parsed === 'object' && parsed.objects) {
+            // This looks like Fabric.js drawing data
+            parsedData = parsed;
+            answerType = 'drawing';
+            console.log('Found drawing data for answer:', answer.id, 'objects count:', parsed.objects.length);
+          }
+        } catch (e) {
+          // Not JSON, treat as regular text
+          console.log('Not JSON data for answer:', answer.id, 'text preview:', answer.text.substring(0, 50));
+        }
+        
+        return {
+          ...answer,
+          userId: answer.user?.userId || answer.userId, // Use localStorage userId for frontend compatibility
+          text: answerType === 'text' ? answer.text : 'Drawing answer',
+          drawingData: parsedData,
+          answerType,
+        };
+      });
       
       return res.status(200).json(transformedAnswers);
     } catch (error) {
@@ -29,8 +62,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'POST') {
     const { userId, username, text, drawingData } = req.body;
-    if (!userId || !username || !text) {
-      return res.status(400).json({ error: 'userId, username, and text are required' });
+    if (!userId || !username || (!text && !drawingData)) {
+      return res.status(400).json({ error: 'userId, username, and either text or drawingData are required' });
     }
     try {
       // Ensure user exists in the room and get their database ID
@@ -45,13 +78,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
+      // Store drawing data as JSON string in text field
+      const textToStore = drawingData ? JSON.stringify(drawingData) : text;
+      console.log('Storing answer:', { 
+        hasDrawingData: !!drawingData, 
+        textLength: textToStore.length,
+        textPreview: textToStore.substring(0, 100)
+      });
+
       const answer = await prisma.answer.create({
         data: {
           roomId,
           userId: user.id, // Use the database User.id, not the localStorage userId
           username,
-          text,
-          drawingData: drawingData || null,
+          text: textToStore,
           timestamp: new Date(),
           revealed: false,
         },

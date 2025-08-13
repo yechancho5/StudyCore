@@ -5,6 +5,20 @@ import ParticipantsSidebar from '../../components/ParticipantsSidebar';
 import KickModal from '../../components/KickModal';
 import KickedModal from '../../components/KickedModal';
 import DrawingCanvas from '../../components/DrawingCanvas';
+import DrawingViewer from '../../components/DrawingViewer';
+
+// Types
+interface Answer {
+  id: string;
+  roomId: string;
+  userId: string;
+  username: string;
+  text: string;
+  drawingData?: any;
+  answerType?: 'text' | 'drawing';
+  timestamp: string | Date;
+  revealed: boolean;
+}
 
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
@@ -22,7 +36,7 @@ const RoomPage = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [answers, setAnswers] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Answer[]>([]);
   const [fetchingAnswers, setFetchingAnswers] = useState(false);
   const [answersLoaded, setAnswersLoaded] = useState(false);
   const [readyForNextQuestion, setReadyForNextQuestion] = useState(false);
@@ -138,6 +152,13 @@ const RoomPage = () => {
       if (!res.ok) return; // Don't set error for polling
       const data = await res.json();
       console.log('Polled answers:', data);
+      
+      // Temporary debugging - check if we have drawing data
+      const drawingAnswers = data.filter((ans: any) => ans.answerType === 'drawing');
+      if (drawingAnswers.length > 0) {
+        console.log('Found drawing answers:', drawingAnswers);
+      }
+      
       setAnswers(data);
     } catch (err) {
       // Silently fail for polling
@@ -295,7 +316,7 @@ const RoomPage = () => {
         clearInterval(fastInterval);
       };
     }
-  }, [roomId]); // Only depend on roomId
+  }, [roomId, hasBeenKicked, revealed]); // Include hasBeenKicked and revealed in dependencies
 
   // Separate effect for users polling
   useEffect(() => {
@@ -350,7 +371,7 @@ const RoomPage = () => {
   // Join room when username is available
   useEffect(() => {
     console.log('Join room effect triggered:', { username, roomId, hasUsername: !!username, hasRoomId: !!roomId });
-    if (username && roomId && typeof roomId === 'string') {
+    if (username && roomId && typeof roomId === 'string' && !hasBeenKicked) {
       // Try to join immediately
       joinRoom();
       
@@ -379,15 +400,15 @@ const RoomPage = () => {
             clearInterval(retryInterval);
           }
         }
-              }, 1000);
+      }, 1000);
       
       return () => clearInterval(retryInterval);
     }
-  }, [username, roomId, joinRoom, hasBeenKicked]);
+  }, [username, roomId, hasBeenKicked]); // Remove joinRoom from dependencies
 
   // Heartbeat to update user's lastSeen
   useEffect(() => {
-    if (!username || !roomId || typeof roomId !== 'string') return;
+    if (!username || !roomId || typeof roomId !== 'string' || hasBeenKicked) return;
     
     // Send heartbeat every 30 seconds
     const heartbeatInterval = setInterval(() => {
@@ -395,7 +416,7 @@ const RoomPage = () => {
     }, 30000);
     
     return () => clearInterval(heartbeatInterval);
-  }, [username, roomId, hasBeenKicked]);
+  }, [username, roomId, hasBeenKicked]); // Remove updateUserHeartbeat from dependencies
 
   // Track previous question to detect changes (for non-hosts)
   const [previousQuestion, setPreviousQuestion] = useState<string | null>(null);
@@ -472,15 +493,22 @@ const RoomPage = () => {
     setSaved(false);
     const userId = getOrCreateUserId();
     try {
+      const requestBody: any = {
+        userId, 
+        username: username || 'Anonymous'
+      };
+
+      // Add the appropriate data based on answer mode
+      if (answerMode === 'text') {
+        requestBody.text = answer;
+      } else if (answerMode === 'drawing') {
+        requestBody.drawingData = drawingData;
+      }
+
       const res = await fetch(`/api/room/${roomId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          username: username || 'Anonymous', 
-          text: answerMode === 'text' ? answer : 'Drawing answer',
-          drawingData: answerMode === 'drawing' ? drawingData : null
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) throw new Error('Failed to save answer');
       
@@ -781,7 +809,25 @@ const RoomPage = () => {
                 ) : hasSavedAnswer ? (
                   <div className="bg-green-50 border border-green-200 p-4 rounded-lg shadow-sm">
                     <div className="text-green-700 text-sm font-medium mb-2">Your saved answer:</div>
-                    <div className="text-gray-800 whitespace-pre-line">{answers.find(a => a.userId === getOrCreateUserId())?.text || 'Answer saved!'}</div>
+                    {(() => {
+                      const userAnswer = answers.find(a => a.userId === getOrCreateUserId());
+                      console.log('User answer for display:', userAnswer);
+                      if (userAnswer?.answerType === 'drawing' && userAnswer?.drawingData) {
+                        console.log('Displaying drawing for user answer');
+                        return (
+                          <div className="mt-2">
+                            <DrawingViewer 
+                              drawingData={userAnswer.drawingData} 
+                              width={400} 
+                              height={250} 
+                            />
+                          </div>
+                        );
+                      } else {
+                        console.log('Displaying text for user answer:', userAnswer?.text);
+                        return <div className="text-gray-800 whitespace-pre-line">{userAnswer?.text || 'Answer saved!'}</div>;
+                      }
+                    })()}
                   </div>
                 ) : (
                   <>
@@ -827,7 +873,7 @@ const RoomPage = () => {
                     {answerMode === 'drawing' && (
                       <div className="mb-2">
                         <DrawingCanvas
-                          width={600}
+                          width={800}
                           height={400}
                           onDrawingChange={setDrawingData}
                           readOnly={false}
@@ -860,7 +906,28 @@ const RoomPage = () => {
                         {answers.map(ans => (
                           <div key={ans.id} className="bg-white border border-gray-200 rounded-xl shadow-md p-5 flex flex-col gap-2 hover:shadow-lg transition">
                             <span className="inline-block bg-indigo-100 text-indigo-700 font-mono text-xs px-2 py-1 rounded-full w-fit">{ans.username}</span>
-                            <div className="mt-1 text-gray-800 whitespace-pre-line text-base">{ans.text}</div>
+                            
+                            {/* Show drawing if it exists */}
+                            {(() => {
+                              console.log('Answer for revealed display:', ans);
+                              if (ans.answerType === 'drawing' && ans.drawingData) {
+                                console.log('Displaying drawing in revealed answers');
+                                return (
+                                  <div className="mt-2">
+                                    <DrawingViewer 
+                                      drawingData={ans.drawingData} 
+                                      width={300} 
+                                      height={200} 
+                                    />
+                                  </div>
+                                );
+                              } else {
+                                console.log('Displaying text in revealed answers:', ans.text);
+                                return (
+                                  <div className="mt-1 text-gray-800 whitespace-pre-line text-base">{ans.text}</div>
+                                );
+                              }
+                            })()}
                           </div>
                         ))}
                       </div>
