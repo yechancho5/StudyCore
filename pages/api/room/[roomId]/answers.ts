@@ -28,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { userId, username, text } = req.body;
+    const { userId, username, text, drawingData } = req.body;
     if (!userId || !username || !text) {
       return res.status(400).json({ error: 'userId, username, and text are required' });
     }
@@ -51,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId: user.id, // Use the database User.id, not the localStorage userId
           username,
           text,
+          drawingData: drawingData || null,
           timestamp: new Date(),
           revealed: false,
         },

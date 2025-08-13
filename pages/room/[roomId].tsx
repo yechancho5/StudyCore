@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import ParticipantsSidebar from '../../components/ParticipantsSidebar';
 import KickModal from '../../components/KickModal';
 import KickedModal from '../../components/KickedModal';
+import DrawingCanvas from '../../components/DrawingCanvas';
 
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
@@ -35,6 +36,8 @@ const RoomPage = () => {
     username: ''
   });
   const [hasBeenKicked, setHasBeenKicked] = useState(false);
+  const [answerMode, setAnswerMode] = useState<'text' | 'drawing'>('text');
+  const [drawingData, setDrawingData] = useState<any>(null);
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
@@ -460,7 +463,11 @@ const RoomPage = () => {
   // Save answer
   const handleSaveAnswer = async () => {
     if (!roomId || typeof roomId !== 'string') return;
-    if (!answer.trim()) return;
+    
+    // Validate input based on mode
+    if (answerMode === 'text' && !answer.trim()) return;
+    if (answerMode === 'drawing' && !drawingData) return;
+    
     setSaving(true);
     setSaved(false);
     const userId = getOrCreateUserId();
@@ -468,7 +475,12 @@ const RoomPage = () => {
       const res = await fetch(`/api/room/${roomId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, username: username || 'Anonymous', text: answer }),
+        body: JSON.stringify({ 
+          userId, 
+          username: username || 'Anonymous', 
+          text: answerMode === 'text' ? answer : 'Drawing answer',
+          drawingData: answerMode === 'drawing' ? drawingData : null
+        }),
       });
       if (!res.ok) throw new Error('Failed to save answer');
       
@@ -478,7 +490,8 @@ const RoomPage = () => {
         roomId,
         userId,
         username: username || 'Anonymous',
-        text: answer,
+        text: answerMode === 'text' ? answer : 'Drawing answer',
+        drawingData: answerMode === 'drawing' ? drawingData : null,
         timestamp: new Date(),
         revealed: false
       };
@@ -486,7 +499,10 @@ const RoomPage = () => {
       setSaved(true);
       setHasSavedAnswer(true); // Mark that user has saved an answer
       setTimeout(() => setSaved(false), 2000);
-      setAnswer(''); // Clear the input
+      
+      // Clear the inputs
+      setAnswer('');
+      setDrawingData(null);
       
       // Notify other users immediately
       localStorage.setItem(`room-${roomId}-updated`, Date.now().toString());
@@ -769,17 +785,60 @@ const RoomPage = () => {
                   </div>
                 ) : (
                   <>
-                    <textarea
-                      className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
-                      value={answer}
-                      onChange={e => setAnswer(e.target.value)}
-                      placeholder="Write your answer here..."
-                      rows={5}
-                    />
+                    {/* Answer Mode Toggle */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm text-gray-600">Answer mode:</span>
+                      <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button
+                          onClick={() => setAnswerMode('text')}
+                          className={`px-3 py-1 text-sm rounded-md transition ${
+                            answerMode === 'text' 
+                              ? 'bg-white text-gray-900 shadow-sm' 
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          Text
+                        </button>
+                        <button
+                          onClick={() => setAnswerMode('drawing')}
+                          className={`px-3 py-1 text-sm rounded-md transition ${
+                            answerMode === 'drawing' 
+                              ? 'bg-white text-gray-900 shadow-sm' 
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          Drawing
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Text Answer Input */}
+                    {answerMode === 'text' && (
+                      <textarea
+                        className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition mb-2 resize-none"
+                        value={answer}
+                        onChange={e => setAnswer(e.target.value)}
+                        placeholder="Write your answer here..."
+                        rows={5}
+                      />
+                    )}
+
+                    {/* Drawing Canvas */}
+                    {answerMode === 'drawing' && (
+                      <div className="mb-2">
+                        <DrawingCanvas
+                          width={600}
+                          height={400}
+                          onDrawingChange={setDrawingData}
+                          readOnly={false}
+                        />
+                      </div>
+                    )}
+
                     <button
                       className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:opacity-60"
                       onClick={handleSaveAnswer}
-                      disabled={saving || !answer.trim()}
+                      disabled={saving || (answerMode === 'text' ? !answer.trim() : !drawingData)}
                     >
                       {saving ? 'Saving...' : 'Save Answer'}
                     </button>

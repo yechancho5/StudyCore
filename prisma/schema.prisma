@@ -40,6 +40,7 @@ model Answer {
   userId    String   @db.Uuid
   username  String
   text      String
+  drawingData Json?   // Store Fabric.js drawing data as JSON
   timestamp DateTime @default(now())
   revealed  Boolean  @default(false)
 }

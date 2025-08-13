@@ -27,6 +27,7 @@
     "@types/node": "^24.0.15",
     "@types/react": "^19.1.8",
     "autoprefixer": "^10.4.21",
+    "fabric": "^6.7.1",
     "firebase": "^12.0.0",
     "nanoid": "^5.1.5",
     "next": "^15.4.2",
