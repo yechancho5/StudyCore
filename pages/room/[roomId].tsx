@@ -23,6 +23,7 @@ interface Answer {
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
 const RoomPage = () => {
+  // === 1. STATE AND CONSTANTS ===
   const router = useRouter();
   const { roomId, username: queryUsername } = router.query;
   const [room, setRoom] = useState<any>(null);
@@ -53,6 +54,7 @@ const RoomPage = () => {
   const [answerMode, setAnswerMode] = useState<'text' | 'drawing'>('text');
   const [drawingData, setDrawingData] = useState<any>(null);
 
+    // === 2. FUNCTIONS (Business Logic & Handlers)===
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
     let userId = localStorage.getItem('study-userId');
@@ -255,7 +257,8 @@ const RoomPage = () => {
   const fetchUsersRef = useRef(fetchUsers);
   const pollUsersRef = useRef(pollUsers);
   const updateUserHeartbeatRef = useRef(updateUserHeartbeat);
-  
+
+  // === 2. SIDE EFFECTS (useEffect Hooks) ===
   // Update refs when functions change
   useEffect(() => {
     fetchRoomRef.current = fetchRoom;
@@ -663,6 +666,7 @@ const RoomPage = () => {
     }
   };
 
+  // === 4. RENDER (return JSX) ===
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">

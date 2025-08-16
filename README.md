@@ -111,7 +111,7 @@ StudyCore/
 ## Tech Stack
 - Next.js (React, API routes)
 - Tailwind CSS
-- PostgreSQL (Supabase, Railway, Neon, or local)
+- PostgreSQL (Supabase)
 - Prisma ORM
 - Vercel (hosting)
 
