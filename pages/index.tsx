@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { nanoid } from 'nanoid';
+import { LS_USER_ID, LS_USERNAME } from '../lib/keys';
 
 const LandingPage = () => {
   const router = useRouter();
+  
+  // Local State
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   const [error, setError] = useState('');
@@ -12,10 +15,10 @@ const LandingPage = () => {
 
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
-    let userId = localStorage.getItem('study-userId');
+    let userId = localStorage.getItem(LS_USER_ID);
     if (!userId) {
       userId = nanoid(12);
-      localStorage.setItem('study-userId', userId);
+      localStorage.setItem(LS_USER_ID, userId);
     }
     return userId;
   };
@@ -35,7 +38,7 @@ const LandingPage = () => {
       });
       if (!res.ok) throw new Error('Failed to create room');
       const room = await res.json();
-      localStorage.setItem('study-username', username);
+      localStorage.setItem(LS_USERNAME, username);
       router.push(`/room/${room.id}?username=${encodeURIComponent(username)}`);
     } catch (err) {
       setError('Failed to create room. Please try again.');
@@ -50,7 +53,7 @@ const LandingPage = () => {
       return;
     }
     getOrCreateUserId(); // Ensure every user has a userId
-    localStorage.setItem('study-username', username);
+    localStorage.setItem(LS_USERNAME, username);
     router.push(`/room/${roomId}?username=${encodeURIComponent(username)}`);
   };
 

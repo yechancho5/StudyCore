@@ -6,6 +6,7 @@ import KickModal from '../../components/KickModal';
 import KickedModal from '../../components/KickedModal';
 import DrawingCanvas from '../../components/DrawingCanvas';
 import DrawingViewer from '../../components/DrawingViewer';
+import { LS_USER_ID, LS_USERNAME } from '../../lib/keys';
 
 // Types
 interface Answer {
@@ -57,10 +58,10 @@ const RoomPage = () => {
     // === 2. FUNCTIONS (Business Logic & Handlers)===
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
-    let userId = localStorage.getItem('study-userId');
+    let userId = localStorage.getItem(LS_USER_ID);
     if (!userId) {
       userId = nanoid(12);
-      localStorage.setItem('study-userId', userId);
+      localStorage.setItem(LS_USER_ID, userId);
     }
     return userId;
   };
@@ -79,7 +80,7 @@ const RoomPage = () => {
       setRevealed(!!data.revealed);
       // Check if current user is host
       if (typeof window !== 'undefined') {
-        const userId = localStorage.getItem('study-userId');
+        const userId = localStorage.getItem(LS_USER_ID);
         setIsHost(userId && data.hostId && userId === data.hostId);
       }
     } catch (err) {
@@ -120,7 +121,7 @@ const RoomPage = () => {
       
       // Check if current user is host
       if (typeof window !== 'undefined') {
-        const userId = localStorage.getItem('study-userId');
+        const userId = localStorage.getItem(LS_USER_ID);
         setIsHost(userId && data.hostId && userId === data.hostId);
       }
     } catch (err) {
@@ -363,9 +364,9 @@ const RoomPage = () => {
     if (typeof window !== 'undefined') {
       if (typeof queryUsername === 'string' && queryUsername) {
         setUsername(queryUsername);
-        localStorage.setItem('study-username', queryUsername);
+        localStorage.setItem(LS_USERNAME, queryUsername);
       } else {
-        const stored = localStorage.getItem('study-username');
+        const stored = localStorage.getItem(LS_USERNAME);
         if (stored) setUsername(stored);
       }
     }
