@@ -5,15 +5,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     const { hostId } = req.body;
     if (!hostId) {
-      return res.status(400).json({ error: 'hostId is required' });
+      return res
+      .status(400)
+      .json({ success: false, error: {code: 'BAD_INPUT', message: 'hostId is required' } });
     }
-    // Debug environment variables
-    console.log('NODE_ENV:', process.env.NODE_ENV);
-    console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-    console.log('DATABASE_URL starts with:', process.env.DATABASE_URL?.substring(0, 20));
+
+    // minimal logs
+    console.log('[POST /api/room] start');
     
     try {
-      console.log('Attempting to create room with hostId:', hostId);
+      console.log('[POST /api/room] creating');
       const room = await prismaWithRetry(async () => {
         return await prisma.room.create({
           data: {
@@ -22,22 +23,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             revealed: false,
             hostId, // Use the hostId from the request body
           },
+          select: {id: true, createdAt: true} // return only roomId + time
         });
       });
-      console.log('Room created successfully:', room.id);
-      console.log('Full room data:', room);
-      return res.status(201).json(room);
+      console.log('[POST /api/room] success', room.id);
+      return res.status(201).json({success: true, data: room});
+    
     } catch (error) {
-      console.error('Failed to create room:', error);
-      return res.status(500).json({ error: 'Failed to create room', details: error });
-    } finally {
-      // Ensure connection is properly closed in serverless environment
-      if (process.env.NODE_ENV === 'production') {
-        await prisma.$disconnect();
-      }
-    }
+      console.error('[POST /api/room] error', error);
+      return res
+      .status(500)
+      .json({ success: false, error: { code: 'DB_ERROR', message: 'Could not create room. Please try again.' } });
+    } 
+
   } else {
     res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    res
+    .status(405)
+    .json({ success: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST' } });
   }
 } 

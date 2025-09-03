@@ -3,59 +3,79 @@ import { prisma } from '../../../lib/prisma';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { roomId } = req.query;
-  if (typeof roomId !== 'string') return res.status(400).json({ error: 'Invalid roomId' });
+  if (typeof roomId !== 'string' || roomId.trim() === '') {
+  return res
+    .status(400)
+    .json({ success: false, error: { code: 'BAD_INPUT', message: 'roomId is required' } });
+}
 
   if (req.method === 'GET') {
     try {
-      const room = await prisma.room.findUnique({ where: { id: roomId } });
-      if (!room) return res.status(404).json({ error: 'Room not found' });
-      return res.status(200).json(room);
+      const room = await prisma.room.findUnique({
+        where: { id: roomId },
+        select: { id: true, question: true, revealed: true, hostId: true} // minimal UI payload
+      });
+      if (!room) {
+        return res
+          .status(404)
+          .json({ success: false, error: { code: 'NOT_FOUND', message: 'Room not found' } });
+      }
+      return res.status(200).json({ success: true, data: room });
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to fetch room', details: error } );
+      return res
+      .status(500)
+      .json({ success: false, error: {code: 'DB_ERROR', message: 'Could not fetch room. Please try again.'} } );
     }
   }
 
   if (req.method === 'PATCH') {
     const { question, revealed } = req.body;
+    const hasQuestion = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'question');
+    const hasRevealed = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'revealed');
+
+    if (!hasQuestion && !hasRevealed) {
+      return res
+        .status(400)
+        .json({ success: false, error: { code: 'BAD_INPUT', message: 'Provide question and/or revealed' } });
+    }
+    
     try {
-      // If posting a new question and resetting revealed state, clear all answers
-      if (question && revealed === false) {
-        // Use a transaction to update room and clear answers
-        const result = await prisma.$transaction([
+      // Build data object only with provided fields
+      const updateData: any = {};
+      if (hasQuestion) updateData.question = question;
+      if (hasRevealed) updateData.revealed = revealed;
+
+      // CASE A: new question provided AND revealed explicitly false → update + clear answers
+      if (hasQuestion && hasRevealed && revealed === false) {
+        const [updated] = await prisma.$transaction([
           prisma.room.update({
             where: { id: roomId },
-            data: { question, revealed },
+            data: { question, revealed }, // both present
+            select: { id: true, question: true, revealed: true }
           }),
-          prisma.answer.deleteMany({
-            where: { roomId },
-          }),
+          prisma.answer.deleteMany({ where: { roomId } })
         ]);
-        return res.status(200).json(result[0]);
-      } else if (question === null && revealed === false) {
-        // If resetting to initial state (null question), clear all answers
-        const result = await prisma.$transaction([
-          prisma.room.update({
-            where: { id: roomId },
-            data: { question: null, revealed: false },
-          }),
-          prisma.answer.deleteMany({
-            where: { roomId },
-          }),
-        ]);
-        return res.status(200).json(result[0]);
-      } else {
-        // Normal update without clearing answers
-        const room = await prisma.room.update({
-          where: { id: roomId },
-          data: { question, revealed },
-        });
-        return res.status(200).json(room);
+        return res.status(200).json({ success: true, data: updated });
       }
+
+      // CASE B: normal partial update (one or both fields provided), no clearing
+      const updated = await prisma.room.update({
+        where: { id: roomId },
+        data: updateData,
+        select: { id: true, question: true, revealed: true }
+      });
+      return res.status(200).json({ success: true, data: updated });
+
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to update room', details: error });
+      return res
+        .status(500)
+        .json({ success: false, error: {code: 'DB_ERROR', message: 'Could not update room. Please try again.'} });
     }
   }
 
   res.setHeader('Allow', ['GET', 'PATCH']);
-  res.status(405).end(`Method ${req.method} Not Allowed`);
+  return res
+    .status(405)
+    .json({ success: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'Use GET, PATCH' } });
+
 } 

@@ -20,6 +20,21 @@ interface Answer {
   timestamp: string | Date;
   revealed: boolean;
 }
+// API helper that calls fetch(), parses JSON once, and throws || returns data
+async function apiJSON<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+  const res = await fetch(input, init);
+  let json: any;
+  try { json = await res.json(); } catch { throw new Error('Invalid server response'); }
+  if (!json?.success) throw new Error(json?.error?.message || `Request failed (${res.status})`);
+  return json.data as T;
+}
+
+type RoomDTO = {
+  id: string;
+  question: string | null;
+  revealed: boolean;
+  hostId: string; // make sure backend returns this
+};
 
 const POLL_INTERVAL = 2000; // 2 seconds - faster updates for better UX
 
@@ -54,8 +69,9 @@ const RoomPage = () => {
   const [hasBeenKicked, setHasBeenKicked] = useState(false);
   const [answerMode, setAnswerMode] = useState<'text' | 'drawing'>('text');
   const [drawingData, setDrawingData] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
 
-    // === 2. FUNCTIONS (Business Logic & Handlers)===
+    // === 2. FUNCTIONS (Business Logic & Handlers) ===
   // Ensure a userId is present in localStorage
   const getOrCreateUserId = () => {
     let userId = localStorage.getItem(LS_USER_ID);
@@ -72,16 +88,14 @@ const RoomPage = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/room/${roomId}`);
-      if (!res.ok) throw new Error('Room not found');
-      const data = await res.json();
+      const data = await apiJSON<RoomDTO>(`/api/room/${roomId}`);
       setRoom(data);
       setQuestionInput(data.question || '');
       setRevealed(!!data.revealed);
       // Check if current user is host
       if (typeof window !== 'undefined') {
         const userId = localStorage.getItem(LS_USER_ID);
-        setIsHost(userId && data.hostId && userId === data.hostId);
+         setIsHost(Boolean(userId && data.hostId && userId === data.hostId));
       }
     } catch (err) {
       setError('Room not found.');
@@ -94,35 +108,18 @@ const RoomPage = () => {
   const pollRoom = useCallback(async () => {
     if (!roomId || typeof roomId !== 'string') return;
     try {
-      const res = await fetch(`/api/room/${roomId}`);
-      if (!res.ok) return; // Don't set error for polling
-      const data = await res.json();
-      
-      // Only update room state if there are actual changes
-      setRoom((prevRoom: any) => {
-        if (prevRoom?.question !== data.question || prevRoom?.revealed !== data.revealed) {
-          return data;
-        }
-        return prevRoom;
+      const data = await apiJSON<RoomDTO>(`/api/room/${roomId}`);
+      setRoom((prev: any) => {
+        if (prev?.question !== data.question || prev?.revealed !== data.revealed) return data;
+        return prev;
       });
-      
-      // Only update question input if it's empty and we're not ready for next question
       if (!readyForNextQuestion) {
         setQuestionInput(prev => prev || data.question || '');
       }
-      
-      // Only update revealed state if it changed
-      setRevealed(prev => {
-        if (prev !== !!data.revealed) {
-          return !!data.revealed;
-        }
-        return prev;
-      });
-      
-      // Check if current user is host
+      setRevealed(prev => (prev !== !!data.revealed ? !!data.revealed : prev));
       if (typeof window !== 'undefined') {
         const userId = localStorage.getItem(LS_USER_ID);
-        setIsHost(userId && data.hostId && userId === data.hostId);
+        setIsHost(Boolean(userId && data.hostId && userId === data.hostId));
       }
     } catch (err) {
       // Silently fail for polling
@@ -453,15 +450,11 @@ const RoomPage = () => {
     if (!roomId || typeof roomId !== 'string') return;
     setPosting(true);
     try {
-      const res = await fetch(`/api/room/${roomId}`, {
+      await apiJSON<RoomDTO>(`/api/room/${roomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          question: questionInput,
-          revealed: false // Reset revealed state when posting new question
-        }),
+        body: JSON.stringify({ question: questionInput, revealed: false })
       });
-      if (!res.ok) throw new Error('Failed to post question');
       
       // Update local state immediately to avoid blinking
       setRoom((prev: any) => ({ 
@@ -570,12 +563,11 @@ const RoomPage = () => {
     }
     
     try {
-      const res = await fetch(`/api/room/${roomId}`, {
+      await apiJSON<RoomDTO>(`/api/room/${roomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revealed: true }),
+        body: JSON.stringify({ revealed: true })
       });
-      if (!res.ok) throw new Error('Failed to reveal answers');
       
       // Update local state immediately to avoid blinking
       setRoom((prev: any) => ({ ...prev, revealed: true }));
@@ -634,16 +626,11 @@ const RoomPage = () => {
     if (!roomId || typeof roomId !== 'string') return;
     
     try {
-      // Update the database to reset to initial state
-      const res = await fetch(`/api/room/${roomId}`, {
+      await apiJSON<RoomDTO>(`/api/room/${roomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          question: null, // Clear the question
-          revealed: false // Reset revealed state
-        }),
+        body: JSON.stringify({ question: null, revealed: false })
       });
-      if (!res.ok) throw new Error('Failed to reset room');
       
       // Update local state immediately
       setReadyForNextQuestion(true);
@@ -701,29 +688,24 @@ const RoomPage = () => {
                     onClick={() => {
                       if (typeof roomId === 'string') {
                         navigator.clipboard.writeText(roomId);
-                      // Optional: Show a brief toast or change button appearance
-                      const button = event?.target as HTMLButtonElement;
-                      if (button) {
-                        const originalText = button.innerHTML;
-                        button.innerHTML = `
-                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                          </svg>
-                        `;
-                        button.classList.add('text-green-600');
-                        setTimeout(() => {
-                          button.innerHTML = originalText;
-                          button.classList.remove('text-green-600');
-                        }, 1000);
-                      }
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1000);
                     }
                   }}
                     className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors"
                     title="Copy Room ID to clipboard"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                    {copied ? (
+                      // check icon
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      // copy icon
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2z" />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 <button

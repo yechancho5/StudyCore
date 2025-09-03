@@ -29,6 +29,7 @@ const LandingPage = () => {
       return;
     }
     setLoading(true);
+    setError('');
     const userId = getOrCreateUserId();
     try {
       const res = await fetch('/api/room', {
@@ -36,10 +37,15 @@ const LandingPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hostId: userId }),
       });
-      if (!res.ok) throw new Error('Failed to create room');
-      const room = await res.json();
+      
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error?.message || 'Failed to create room.');
+        return;
+      }
+      const { id } = json.data
       localStorage.setItem(LS_USERNAME, username);
-      router.push(`/room/${room.id}?username=${encodeURIComponent(username)}`);
+      router.push(`/room/${id}`);
     } catch (err) {
       setError('Failed to create room. Please try again.');
     } finally {
@@ -52,9 +58,10 @@ const LandingPage = () => {
       setError('Both username and Room ID are required to join a room.');
       return;
     }
+    setError('');
     getOrCreateUserId(); // Ensure every user has a userId
     localStorage.setItem(LS_USERNAME, username);
-    router.push(`/room/${roomId}?username=${encodeURIComponent(username)}`);
+    router.push(`/room/${roomId}`);
   };
 
   const handleBackToSelect = () => {
